@@ -28,10 +28,18 @@ func (s *Service) Create(ctx context.Context, input CreateInput) (*taskdomain.Ta
 	}
 
 	model := &taskdomain.Task{
-		Title:       normalized.Title,
-		Description: normalized.Description,
-		Status:      normalized.Status,
+		Title:             normalized.Title,
+		Description:       normalized.Description,
+		Status:            normalized.Status,
+		PeriodicityType:   normalized.PeriodicityType,
+		PeriodicityConfig: taskdomain.PeriodicityConfig{},
 	}
+
+	// Установить конфиг периодичности если задана
+	if normalized.PeriodicityConfig != nil {
+		model.PeriodicityConfig = *normalized.PeriodicityConfig
+	}
+
 	now := s.now()
 	model.CreatedAt = now
 	model.UpdatedAt = now
@@ -63,11 +71,18 @@ func (s *Service) Update(ctx context.Context, id int64, input UpdateInput) (*tas
 	}
 
 	model := &taskdomain.Task{
-		ID:          id,
-		Title:       normalized.Title,
-		Description: normalized.Description,
-		Status:      normalized.Status,
-		UpdatedAt:   s.now(),
+		ID:                id,
+		Title:             normalized.Title,
+		Description:       normalized.Description,
+		Status:            normalized.Status,
+		PeriodicityType:   normalized.PeriodicityType,
+		PeriodicityConfig: taskdomain.PeriodicityConfig{},
+		UpdatedAt:         s.now(),
+	}
+
+	// Установить конфиг периодичности если задана
+	if normalized.PeriodicityConfig != nil {
+		model.PeriodicityConfig = *normalized.PeriodicityConfig
 	}
 
 	updated, err := s.repo.Update(ctx, model)
@@ -106,6 +121,25 @@ func validateCreateInput(input CreateInput) (CreateInput, error) {
 		return CreateInput{}, fmt.Errorf("%w: invalid status", ErrInvalidInput)
 	}
 
+	// Валидация периодичности
+	if input.PeriodicityType == "" {
+		input.PeriodicityType = taskdomain.PeriodicityNone
+	}
+
+	if !input.PeriodicityType.Valid() {
+		return CreateInput{}, fmt.Errorf("%w: invalid periodicity type", ErrInvalidInput)
+	}
+
+	if input.PeriodicityType != taskdomain.PeriodicityNone {
+		if input.PeriodicityConfig == nil {
+			return CreateInput{}, fmt.Errorf("%w: periodicity_config is required when periodicity_type is set", ErrInvalidInput)
+		}
+
+		if err := validatePeriodicityConfig(input.PeriodicityType, *input.PeriodicityConfig); err != nil {
+			return CreateInput{}, fmt.Errorf("%w: %v", ErrInvalidInput, err)
+		}
+	}
+
 	return input, nil
 }
 
@@ -121,5 +155,66 @@ func validateUpdateInput(input UpdateInput) (UpdateInput, error) {
 		return UpdateInput{}, fmt.Errorf("%w: invalid status", ErrInvalidInput)
 	}
 
+	// Валидация периодичности
+	if input.PeriodicityType == "" {
+		input.PeriodicityType = taskdomain.PeriodicityNone
+	}
+
+	if !input.PeriodicityType.Valid() {
+		return UpdateInput{}, fmt.Errorf("%w: invalid periodicity type", ErrInvalidInput)
+	}
+
+	if input.PeriodicityType != taskdomain.PeriodicityNone {
+		if input.PeriodicityConfig == nil {
+			return UpdateInput{}, fmt.Errorf("%w: periodicity_config is required when periodicity_type is set", ErrInvalidInput)
+		}
+
+		if err := validatePeriodicityConfig(input.PeriodicityType, *input.PeriodicityConfig); err != nil {
+			return UpdateInput{}, fmt.Errorf("%w: %v", ErrInvalidInput, err)
+		}
+	}
+
 	return input, nil
+}
+
+// validatePeriodicityConfig проверяет корректность параметров периодичности
+func validatePeriodicityConfig(pType taskdomain.PeriodicityType, config taskdomain.PeriodicityConfig) error {
+	switch pType {
+	case taskdomain.PeriodicityDaily:
+		if config.Interval <= 0 {
+			return fmt.Errorf("interval must be positive for daily periodicity")
+		}
+		if config.StartDate.IsZero() {
+			return fmt.Errorf("start_date is required for daily periodicity")
+		}
+
+	case taskdomain.PeriodicityMonthly:
+		if config.MonthDay < 1 || config.MonthDay > 30 {
+			return fmt.Errorf("month_day must be between 1 and 30 for monthly periodicity")
+		}
+		if config.StartDate.IsZero() {
+			return fmt.Errorf("start_date is required for monthly periodicity")
+		}
+
+	case taskdomain.PeriodicitySpecificDate:
+		if len(config.SpecificDates) == 0 {
+			return fmt.Errorf("specific_dates cannot be empty")
+		}
+		// Проверить формат дат
+		for _, dateStr := range config.SpecificDates {
+			if _, err := time.Parse("2006-01-02", dateStr); err != nil {
+				return fmt.Errorf("invalid date format in specific_dates: %s (expected YYYY-MM-DD)", dateStr)
+			}
+		}
+
+	case taskdomain.PeriodicityEvenDays, taskdomain.PeriodicityOddDays:
+		if config.StartDate.IsZero() {
+			return fmt.Errorf("start_date is required for even/odd days periodicity")
+		}
+
+	case taskdomain.PeriodicityNone:
+		// Нет требований к конфигу
+	}
+
+	return nil
 }
