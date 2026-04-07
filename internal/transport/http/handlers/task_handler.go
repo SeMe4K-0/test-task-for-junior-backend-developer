@@ -40,6 +40,32 @@ func (h *TaskHandler) Create(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, newTaskDTO(created))
 }
 
+// duplicate of the Create, but different name	////////////////////////////////////////////////////////////
+
+func (h *TaskHandler) CreatePereodic(w http.ResponseWriter, r *http.Request) {
+	// должны вставить дополнительно время и повторения
+	var req taskMutationDTO
+	if err := decodeJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+
+	created, err := h.usecase.Create(r.Context(), taskusecase.CreateInput{
+		Title:       req.Title,
+		Description: req.Description,
+		Status:      req.Status,
+		// Pereodic:
+	})
+	if err != nil {
+		writeUsecaseError(w, err)
+		return
+	}
+
+	writeJSON(w, http.StatusCreated, newTaskDTO(created)) // должны выдать что-то дополнительно
+}
+
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 func (h *TaskHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 	id, err := getIDFromRequest(r)
 	if err != nil {
