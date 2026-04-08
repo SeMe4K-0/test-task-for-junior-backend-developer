@@ -50,7 +50,7 @@ func (h *TaskHandler) CreatePereodic(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	created, err := h.usecase.Create(r.Context(), taskusecase.CreateInput{
+	created, err := h.usecase.CreatePereodic(r.Context(), taskusecase.CreateInput{
 		Title:       req.Title,
 		Description: req.Description,
 		Status:      req.Status,

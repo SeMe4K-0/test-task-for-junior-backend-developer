@@ -44,6 +44,32 @@ func (s *Service) Create(ctx context.Context, input CreateInput) (*taskdomain.Ta
 	return created, nil
 }
 
+// ///////////////////// новое
+func (s *Service) CreatePereodic(ctx context.Context, input CreateInput) (*taskdomain.Task, error) {
+	normalized, err := validateCreateInput(input)
+	if err != nil {
+		return nil, err
+	}
+
+	model := &taskdomain.Task{
+		Title:       normalized.Title,
+		Description: normalized.Description,
+		Status:      normalized.Status,
+	}
+	now := s.now()
+	model.CreatedAt = now
+	model.UpdatedAt = now
+
+	created, err := s.repo.CreatePereodic(ctx, model)
+	if err != nil {
+		return nil, err
+	}
+
+	return created, nil
+}
+
+///////////////////////
+
 func (s *Service) GetByID(ctx context.Context, id int64) (*taskdomain.Task, error) {
 	if id <= 0 {
 		return nil, fmt.Errorf("%w: id must be positive", ErrInvalidInput)
