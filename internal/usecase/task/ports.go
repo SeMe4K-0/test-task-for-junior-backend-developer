@@ -8,12 +8,13 @@ import (
 
 type Repository interface {
 	Create(ctx context.Context, task *taskdomain.Task) (*taskdomain.Task, error)
+	// новое
+	CreatePereodic(ctx context.Context, task *taskdomain.Task) (*taskdomain.Task, error)
+	//
 	GetByID(ctx context.Context, id int64) (*taskdomain.Task, error)
 	Update(ctx context.Context, task *taskdomain.Task) (*taskdomain.Task, error)
 	Delete(ctx context.Context, id int64) error
 	List(ctx context.Context) ([]taskdomain.Task, error)
-	// новое
-	CreatePereodic(ctx context.Context, task *taskdomain.Task) (*taskdomain.Task, error)
 }
 
 type Usecase interface {
