@@ -14,7 +14,6 @@ services:
       retries: 10
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./migrations/0001_create_tasks.up.sql:/docker-entrypoint-initdb.d/001_create_tasks.sql:ro
 
   app:
     build:
@@ -23,11 +22,17 @@ services:
     environment:
       HTTP_ADDR: :8080
       DATABASE_DSN: postgres://postgres:postgres@postgres:5432/taskservice?sslmode=disable
+      MIGRATIONS_DIR: /app/migrations
     ports:
       - "8080:8080"
     depends_on:
       postgres:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/healthz >/dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
 volumes:
   postgres_data:

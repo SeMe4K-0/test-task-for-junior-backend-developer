@@ -3,6 +3,7 @@ package handlers
 import (
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"strconv"
 
@@ -12,25 +13,28 @@ import (
 	taskusecase "example.com/taskservice/internal/usecase/task"
 )
 
+const maxRequestBodyBytes = 1 << 20
+
 type TaskHandler struct {
-	usecase taskusecase.Usecase
+	usecase taskusecase.TaskUsecase
 }
 
-func NewTaskHandler(usecase taskusecase.Usecase) *TaskHandler {
+func NewTaskHandler(usecase taskusecase.TaskUsecase) *TaskHandler {
 	return &TaskHandler{usecase: usecase}
 }
 
 func (h *TaskHandler) Create(w http.ResponseWriter, r *http.Request) {
 	var req taskMutationDTO
-	if err := decodeJSON(r, &req); err != nil {
+	if err := decodeJSON(w, r, &req); err != nil {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
 
-	created, err := h.usecase.Create(r.Context(), taskusecase.CreateInput{
+	created, err := h.usecase.Create(r.Context(), taskusecase.CreateTaskInput{
 		Title:       req.Title,
 		Description: req.Description,
 		Status:      req.Status,
+		Schedule:    req.Schedule,
 	})
 	if err != nil {
 		writeUsecaseError(w, err)
@@ -64,15 +68,16 @@ func (h *TaskHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req taskMutationDTO
-	if err := decodeJSON(r, &req); err != nil {
+	if err := decodeJSON(w, r, &req); err != nil {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
 
-	updated, err := h.usecase.Update(r.Context(), id, taskusecase.UpdateInput{
+	updated, err := h.usecase.Update(r.Context(), id, taskusecase.UpdateTaskInput{
 		Title:       req.Title,
 		Description: req.Description,
 		Status:      req.Status,
+		Schedule:    req.Schedule,
 	})
 	if err != nil {
 		writeUsecaseError(w, err)
@@ -98,15 +103,23 @@ func (h *TaskHandler) Delete(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *TaskHandler) List(w http.ResponseWriter, r *http.Request) {
-	tasks, err := h.usecase.List(r.Context())
+	input, err := buildTaskListInput(r)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+
+	result, err := h.usecase.List(r.Context(), input)
 	if err != nil {
 		writeUsecaseError(w, err)
 		return
 	}
 
-	response := make([]taskDTO, 0, len(tasks))
-	for i := range tasks {
-		response = append(response, newTaskDTO(&tasks[i]))
+	writePageHeaders(w, result.Total, result.Limit, result.Offset)
+
+	response := make([]taskDTO, 0, len(result.Items))
+	for i := range result.Items {
+		response = append(response, newTaskDTO(&result.Items[i]))
 	}
 
 	writeJSON(w, http.StatusOK, response)
@@ -115,22 +128,20 @@ func (h *TaskHandler) List(w http.ResponseWriter, r *http.Request) {
 func getIDFromRequest(r *http.Request) (int64, error) {
 	rawID := mux.Vars(r)["id"]
 	if rawID == "" {
-		return 0, errors.New("missing task id")
+		return 0, errors.New("missing id")
 	}
 
 	id, err := strconv.ParseInt(rawID, 10, 64)
-	if err != nil {
-		return 0, errors.New("invalid task id")
-	}
-
-	if id <= 0 {
-		return 0, errors.New("invalid task id")
+	if err != nil || id <= 0 {
+		return 0, errors.New("invalid id")
 	}
 
 	return id, nil
 }
 
-func decodeJSON(r *http.Request, dst any) error {
+func decodeJSON(w http.ResponseWriter, r *http.Request, dst any) error {
+	r.Body = http.MaxBytesReader(w, r.Body, maxRequestBodyBytes)
+
 	decoder := json.NewDecoder(r.Body)
 	decoder.DisallowUnknownFields()
 
@@ -138,7 +149,81 @@ func decodeJSON(r *http.Request, dst any) error {
 		return err
 	}
 
+	if err := decoder.Decode(&struct{}{}); err != io.EOF {
+		return errors.New("request body must contain a single JSON object")
+	}
+
 	return nil
+}
+
+func buildTaskListInput(r *http.Request) (taskusecase.TaskListInput, error) {
+	limit, err := parseOptionalInt(r.URL.Query().Get("limit"))
+	if err != nil {
+		return taskusecase.TaskListInput{}, errors.New("invalid limit query parameter")
+	}
+	offset, err := parseOptionalInt(r.URL.Query().Get("offset"))
+	if err != nil {
+		return taskusecase.TaskListInput{}, errors.New("invalid offset query parameter")
+	}
+
+	var status *taskdomain.Status
+	if rawStatus := r.URL.Query().Get("status"); rawStatus != "" {
+		value := taskdomain.Status(rawStatus)
+		status = &value
+	}
+
+	var templateID *int64
+	if rawTemplateID := r.URL.Query().Get("template_id"); rawTemplateID != "" {
+		value, err := strconv.ParseInt(rawTemplateID, 10, 64)
+		if err != nil {
+			return taskusecase.TaskListInput{}, errors.New("invalid template_id query parameter")
+		}
+		templateID = &value
+	}
+
+	dateFrom, err := parseOptionalDate(r.URL.Query().Get("date_from"))
+	if err != nil {
+		return taskusecase.TaskListInput{}, errors.New("invalid date_from query parameter, expected YYYY-MM-DD")
+	}
+	dateTo, err := parseOptionalDate(r.URL.Query().Get("date_to"))
+	if err != nil {
+		return taskusecase.TaskListInput{}, errors.New("invalid date_to query parameter, expected YYYY-MM-DD")
+	}
+
+	return taskusecase.TaskListInput{
+		Limit:      limit,
+		Offset:     offset,
+		Status:     status,
+		TemplateID: templateID,
+		DateFrom:   dateFrom,
+		DateTo:     dateTo,
+	}, nil
+}
+
+func parseOptionalInt(raw string) (int, error) {
+	if raw == "" {
+		return 0, nil
+	}
+
+	value, err := strconv.Atoi(raw)
+	if err != nil {
+		return 0, err
+	}
+
+	return value, nil
+}
+
+func parseOptionalDate(raw string) (*taskdomain.Date, error) {
+	if raw == "" {
+		return nil, nil
+	}
+
+	date, err := taskdomain.ParseDate(raw)
+	if err != nil {
+		return nil, err
+	}
+
+	return &date, nil
 }
 
 func writeUsecaseError(w http.ResponseWriter, err error) {
@@ -163,4 +248,10 @@ func writeJSON(w http.ResponseWriter, status int, payload any) {
 	w.WriteHeader(status)
 
 	_ = json.NewEncoder(w).Encode(payload)
+}
+
+func writePageHeaders(w http.ResponseWriter, total, limit, offset int) {
+	w.Header().Set("X-Total-Count", strconv.Itoa(total))
+	w.Header().Set("X-Limit", strconv.Itoa(limit))
+	w.Header().Set("X-Offset", strconv.Itoa(offset))
 }

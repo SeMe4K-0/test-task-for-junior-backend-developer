@@ -15,7 +15,7 @@ import (
 	transporthttp "example.com/taskservice/internal/transport/http"
 	swaggerdocs "example.com/taskservice/internal/transport/http/docs"
 	httphandlers "example.com/taskservice/internal/transport/http/handlers"
-	"example.com/taskservice/internal/usecase/task"
+	taskusecase "example.com/taskservice/internal/usecase/task"
 )
 
 func main() {
@@ -35,16 +35,31 @@ func main() {
 	}
 	defer pool.Close()
 
-	taskRepo := postgresrepo.New(pool)
-	taskUsecase := task.NewService(taskRepo)
-	taskHandler := httphandlers.NewTaskHandler(taskUsecase)
-	docsHandler := swaggerdocs.NewHandler()
-	router := transporthttp.NewRouter(taskHandler, docsHandler)
+	if err := infrastructurepostgres.ApplyMigrations(ctx, pool, cfg.MigrationsDir); err != nil {
+		logger.Error("apply migrations", "error", err)
+		os.Exit(1)
+	}
 
+	repo := postgresrepo.New(pool)
+	service := taskusecase.NewService(repo)
+	taskHandler := httphandlers.NewTaskHandler(service)
+	templateHandler := httphandlers.NewTemplateHandler(service)
+	healthHandler := httphandlers.NewHealthHandler(func(r *http.Request) error {
+		healthCtx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
+		defer cancel()
+
+		return repo.Ping(healthCtx)
+	})
+	docsHandler := swaggerdocs.NewHandler()
+
+	router := transporthttp.NewRouter(logger, healthHandler, taskHandler, templateHandler, docsHandler)
 	server := &http.Server{
 		Addr:              cfg.HTTPAddr,
 		Handler:           router,
 		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       10 * time.Second,
+		WriteTimeout:      15 * time.Second,
+		IdleTimeout:       60 * time.Second,
 	}
 
 	go func() {
@@ -67,14 +82,16 @@ func main() {
 }
 
 type config struct {
-	HTTPAddr    string
-	DatabaseDSN string
+	HTTPAddr      string
+	DatabaseDSN   string
+	MigrationsDir string
 }
 
 func loadConfig() config {
 	cfg := config{
-		HTTPAddr:    envOrDefault("HTTP_ADDR", ":8080"),
-		DatabaseDSN: envOrDefault("DATABASE_DSN", "postgres://postgres:postgres@localhost:5432/taskservice?sslmode=disable"),
+		HTTPAddr:      envOrDefault("HTTP_ADDR", ":8080"),
+		DatabaseDSN:   envOrDefault("DATABASE_DSN", "postgres://postgres:postgres@localhost:5432/taskservice?sslmode=disable"),
+		MigrationsDir: envOrDefault("MIGRATIONS_DIR", "migrations"),
 	}
 
 	if cfg.DatabaseDSN == "" {

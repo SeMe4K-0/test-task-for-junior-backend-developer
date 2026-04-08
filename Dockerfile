@@ -17,6 +17,7 @@ WORKDIR /app
 RUN apk add --no-cache ca-certificates
 
 COPY --from=builder /out/taskservice /app/taskservice
+COPY migrations /app/migrations
 
 EXPOSE 8080
 

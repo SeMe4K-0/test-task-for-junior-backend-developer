@@ -1,0 +1,11 @@
+CREATE TABLE IF NOT EXISTS task_occurrences (
+	id BIGSERIAL PRIMARY KEY,
+	template_id BIGINT NOT NULL REFERENCES task_templates(id) ON DELETE CASCADE,
+	title TEXT NOT NULL,
+	description TEXT NOT NULL DEFAULT '',
+	status TEXT NOT NULL,
+	scheduled_for DATE NOT NULL,
+	created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+	updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+	completed_at TIMESTAMPTZ
+);
