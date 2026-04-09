@@ -117,7 +117,7 @@ func (h *TaskHandler) List(w http.ResponseWriter, r *http.Request) {
 // /api/v1/tasks/batch	///////////////////////////////////////////////////////////
 
 func (h *TaskHandler) CreatePereodic(w http.ResponseWriter, r *http.Request) {
-	var req taskMutationDTO
+	var req taskMutationPereodicDTO
 	if err := decodeJSON(r, &req); err != nil {
 		writeError(w, http.StatusBadRequest, err)
 		return
@@ -127,7 +127,6 @@ func (h *TaskHandler) CreatePereodic(w http.ResponseWriter, r *http.Request) {
 		Title:       req.Title,
 		Description: req.Description,
 		Status:      req.Status,
-		// Pereodic:
 	})
 	if err != nil {
 		writeUsecaseError(w, err)

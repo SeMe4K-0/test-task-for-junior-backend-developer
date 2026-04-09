@@ -140,7 +140,7 @@
           "required": true,
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/CreateTaskRequest" }
+              "schema": { "$ref": "#/components/schemas/CreatePereodicTaskRequest" }
             }
           }
         },
@@ -240,6 +240,29 @@
             "type": "string",
             "format": "date-time",
             "example": "2026-03-24T00:00:00Z"
+          }
+        }
+      },
+      "CreatePereodicTaskRequest": {
+        "type": "object",
+        "required": ["title"],
+        "properties": {
+          "title": {
+            "type": "string",
+            "example": "Prepare release (pereodic)"
+          },
+          "description": {
+            "type": "string",
+            "example": "Collect M)))"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["new", "in_progress", "done"],
+            "example": "new"
+          },
+          "repetition":{
+            "type": "int",
+            "example": 1
           }
         }
       },
