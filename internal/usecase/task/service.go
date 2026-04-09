@@ -142,6 +142,16 @@ func (s *Service) CreatePereodic(ctx context.Context, input CreatePereodicInput)
 	if err != nil {
 		return nil, err
 	}
+	// model.ID += 1
+	// model.CreatedAt = model.CreatedAt.AddDate(0, 0, 1)
+	// model.UpdatedAt = model.UpdatedAt.AddDate(0, 0, 1)
+
+	// for i := 1; i < input.Repetition; i++ {
+	// 	created, err = s.repo.CreatePereodic(ctx, model)
+	// 	model.ID += 1
+	// 	model.CreatedAt = model.CreatedAt.AddDate(0, 0, 1)
+	// 	model.UpdatedAt = model.UpdatedAt.AddDate(0, 0, 1)
+	// }
 
 	return created, nil
 }
@@ -150,7 +160,7 @@ func validateCreatePereodicInput(input CreatePereodicInput) (CreatePereodicInput
 	input.Title = strings.TrimSpace(input.Title)
 	input.Description = strings.TrimSpace(input.Description)
 
-	if input.Repetition < -1 {
+	if input.Repetition < 0 {
 		return CreatePereodicInput{}, fmt.Errorf("%w: invalid repetition", ErrInvalidInput)
 	}
 

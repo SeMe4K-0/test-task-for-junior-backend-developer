@@ -127,6 +127,7 @@ func (r *Repository) List(ctx context.Context) ([]taskdomain.Task, error) {
 
 // /api/v1/tasks/batch	//////////////////////////////////////////////////////////////////////////////////////////
 func (r *Repository) CreatePereodic(ctx context.Context, task *taskdomain.Task) (*taskdomain.Task, error) {
+
 	const query = `
 		INSERT INTO tasks (title, description, status, created_at, updated_at)
 		VALUES ($1, $2, $3, $4, $5)
