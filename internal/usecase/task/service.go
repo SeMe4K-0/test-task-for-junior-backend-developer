@@ -142,16 +142,15 @@ func (s *Service) CreatePereodic(ctx context.Context, input CreatePereodicInput)
 	if err != nil {
 		return nil, err
 	}
-	// model.ID += 1
-	// model.CreatedAt = model.CreatedAt.AddDate(0, 0, 1)
-	// model.UpdatedAt = model.UpdatedAt.AddDate(0, 0, 1)
 
-	// for i := 1; i < input.Repetition; i++ {
-	// 	created, err = s.repo.CreatePereodic(ctx, model)
-	// 	model.ID += 1
-	// 	model.CreatedAt = model.CreatedAt.AddDate(0, 0, 1)
-	// 	model.UpdatedAt = model.UpdatedAt.AddDate(0, 0, 1)
-	// }
+	model.CreatedAt = model.CreatedAt.AddDate(0, 0, 1)
+	model.UpdatedAt = model.UpdatedAt.AddDate(0, 0, 1)
+
+	for i := 1; i < input.Repetition; i++ {
+		created, err = s.repo.CreatePereodic(ctx, model)
+		model.CreatedAt = model.CreatedAt.AddDate(0, 0, 1)
+		model.UpdatedAt = model.UpdatedAt.AddDate(0, 0, 1)
+	}
 
 	return created, nil
 }
