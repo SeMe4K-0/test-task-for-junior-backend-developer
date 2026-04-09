@@ -6,6 +6,8 @@ import (
 	taskdomain "example.com/taskservice/internal/domain/task"
 )
 
+//здесь тоже добавляем
+
 type Repository interface {
 	Create(ctx context.Context, task *taskdomain.Task) (*taskdomain.Task, error)
 	GetByID(ctx context.Context, id int64) (*taskdomain.Task, error)
@@ -26,10 +28,12 @@ type CreateInput struct {
 	Title       string
 	Description string
 	Status      taskdomain.Status
+	PeriodConf  *taskdomain.PeriodConf
 }
 
 type UpdateInput struct {
 	Title       string
 	Description string
 	Status      taskdomain.Status
+	PeriodConf  *taskdomain.PeriodConf
 }
