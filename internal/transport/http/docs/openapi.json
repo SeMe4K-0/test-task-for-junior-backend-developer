@@ -131,7 +131,33 @@
           "404": { "$ref": "#/components/responses/NotFound" }
         }
       }
+    },
+    "/api/v1/tasks/batch": {
+      "post": {
+        "tags": ["Tasks"],
+        "summary": "Create Pereodic task",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CreateTaskRequest" }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created Pereodic task",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Task" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" }
+        }
+      }
     }
+
   },
   "components": {
     "responses": {

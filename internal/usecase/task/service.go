@@ -21,6 +21,7 @@ func NewService(repo Repository) *Service {
 	}
 }
 
+// /api/v1/tasks	///////////////////////////////////////////////////////////////////////////////////////////
 func (s *Service) Create(ctx context.Context, input CreateInput) (*taskdomain.Task, error) {
 	normalized, err := validateCreateInput(input)
 	if err != nil {
@@ -44,32 +45,7 @@ func (s *Service) Create(ctx context.Context, input CreateInput) (*taskdomain.Ta
 	return created, nil
 }
 
-// ///////////////////// новое
-func (s *Service) CreatePereodic(ctx context.Context, input CreateInput) (*taskdomain.Task, error) {
-	normalized, err := validateCreateInput(input)
-	if err != nil {
-		return nil, err
-	}
-
-	model := &taskdomain.Task{
-		Title:       normalized.Title,
-		Description: normalized.Description,
-		Status:      normalized.Status,
-	}
-	now := s.now()
-	model.CreatedAt = now
-	model.UpdatedAt = now
-
-	created, err := s.repo.CreatePereodic(ctx, model)
-	if err != nil {
-		return nil, err
-	}
-
-	return created, nil
-}
-
-///////////////////////
-
+// /api/v1/tasks/{id}	//////////////////////////////////////////////////////////////////////////////////////////////
 func (s *Service) GetByID(ctx context.Context, id int64) (*taskdomain.Task, error) {
 	if id <= 0 {
 		return nil, fmt.Errorf("%w: id must be positive", ErrInvalidInput)
@@ -135,6 +111,65 @@ func validateCreateInput(input CreateInput) (CreateInput, error) {
 	return input, nil
 }
 
+//
+
+// /api/v1/tasks/batch	//////////////////////////////////////////////////////////////////////////////////////////////
+// входит первичная инфа
+func (s *Service) CreatePereodic(ctx context.Context, input CreatePereodicInput) (*taskdomain.Task, error) {
+	normalized, err := validateCreatePereodicInput(input)
+	if err != nil {
+		return nil, err
+	}
+
+	model := &taskdomain.Task{
+		Title:       normalized.Title,
+		Description: normalized.Description,
+		Status:      normalized.Status,
+	}
+	var strbldr strings.Builder
+	strbldr.WriteString(model.Title)
+	strbldr.WriteString(" (Повторное)")
+
+	if input.Repetition != 0 {
+		model.Title = strbldr.String()
+	}
+
+	now := s.now()
+	model.CreatedAt = now
+	model.UpdatedAt = now
+
+	created, err := s.repo.CreatePereodic(ctx, model)
+	if err != nil {
+		return nil, err
+	}
+
+	return created, nil
+}
+
+func validateCreatePereodicInput(input CreatePereodicInput) (CreatePereodicInput, error) {
+	input.Title = strings.TrimSpace(input.Title)
+	input.Description = strings.TrimSpace(input.Description)
+
+	if input.Repetition < -1 {
+		return CreatePereodicInput{}, fmt.Errorf("%w: invalid repetition", ErrInvalidInput)
+	}
+
+	if input.Title == "" {
+		return CreatePereodicInput{}, fmt.Errorf("%w: title is required", ErrInvalidInput)
+	}
+
+	if input.Status == "" {
+		input.Status = taskdomain.StatusNew
+	}
+
+	if !input.Status.Valid() {
+		return CreatePereodicInput{}, fmt.Errorf("%w: invalid status", ErrInvalidInput)
+	}
+
+	return input, nil
+}
+
+// other //////////////////////////////////////////////////////////////////////////
 func validateUpdateInput(input UpdateInput) (UpdateInput, error) {
 	input.Title = strings.TrimSpace(input.Title)
 	input.Description = strings.TrimSpace(input.Description)

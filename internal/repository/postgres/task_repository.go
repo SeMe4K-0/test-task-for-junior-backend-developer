@@ -18,6 +18,7 @@ func New(pool *pgxpool.Pool) *Repository {
 	return &Repository{pool: pool}
 }
 
+// /api/v1/tasks	//////////////////////////////////////////////////////////////////////////////////////////////
 func (r *Repository) Create(ctx context.Context, task *taskdomain.Task) (*taskdomain.Task, error) {
 	const query = `
 		INSERT INTO tasks (title, description, status, created_at, updated_at)
@@ -34,25 +35,7 @@ func (r *Repository) Create(ctx context.Context, task *taskdomain.Task) (*taskdo
 	return created, nil
 }
 
-// / нвоое
-func (r *Repository) CreatePereodic(ctx context.Context, task *taskdomain.Task) (*taskdomain.Task, error) {
-	const query = `
-		INSERT INTO tasks (title, description, status, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5)
-		RETURNING id, title, description, status, created_at, updated_at
-	`
-
-	row := r.pool.QueryRow(ctx, query, task.Title, task.Description, task.Status, task.CreatedAt, task.UpdatedAt)
-	created, err := scanTask(row)
-	if err != nil {
-		return nil, err
-	}
-
-	return created, nil
-}
-
-///
-
+// /api/v1/tasks/{id}	////////////////////////////////////////////////////////////////////////////
 func (r *Repository) GetByID(ctx context.Context, id int64) (*taskdomain.Task, error) {
 	const query = `
 		SELECT id, title, description, status, created_at, updated_at
@@ -141,6 +124,25 @@ func (r *Repository) List(ctx context.Context) ([]taskdomain.Task, error) {
 
 	return tasks, nil
 }
+
+// /api/v1/tasks/batch	//////////////////////////////////////////////////////////////////////////////////////////
+func (r *Repository) CreatePereodic(ctx context.Context, task *taskdomain.Task) (*taskdomain.Task, error) {
+	const query = `
+		INSERT INTO tasks (title, description, status, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5)
+		RETURNING id, title, description, status, created_at, updated_at
+	`
+
+	row := r.pool.QueryRow(ctx, query, task.Title, task.Description, task.Status, task.CreatedAt, task.UpdatedAt)
+	created, err := scanTask(row)
+	if err != nil {
+		return nil, err
+	}
+
+	return created, nil
+}
+
+///
 
 type taskScanner interface {
 	Scan(dest ...any) error

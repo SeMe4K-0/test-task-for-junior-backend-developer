@@ -1,5 +1,7 @@
 package task
 
+import "time"
+
 import (
 	"context"
 
@@ -19,13 +21,15 @@ type Repository interface {
 
 type Usecase interface {
 	Create(ctx context.Context, input CreateInput) (*taskdomain.Task, error)
-	// нвоое
-	CreatePereodic(ctx context.Context, input CreateInput) (*taskdomain.Task, error)
 	//
 	GetByID(ctx context.Context, id int64) (*taskdomain.Task, error)
 	Update(ctx context.Context, id int64, input UpdateInput) (*taskdomain.Task, error)
 	Delete(ctx context.Context, id int64) error
 	List(ctx context.Context) ([]taskdomain.Task, error)
+	// нвоое
+	CreatePereodic(ctx context.Context, input CreatePereodicInput) (*taskdomain.Task, error)
+	// UpdatePereodic(ctx context.Context, id int64, input CreatePereodicInput) (*taskdomain.Task, error)
+	// DeletePereodic(ctx context.Context, id int64) error
 }
 
 type CreateInput struct {
@@ -38,4 +42,13 @@ type UpdateInput struct {
 	Title       string
 	Description string
 	Status      taskdomain.Status
+}
+
+type CreatePereodicInput struct {
+	Title       string
+	Description string
+	Status      taskdomain.Status
+	//
+	Repetition  int
+	DateAndTime time.Time
 }
