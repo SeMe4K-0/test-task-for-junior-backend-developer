@@ -5,9 +5,11 @@ import (
 	"fmt"
 	"strings"
 	"time"
-
+	
 	taskdomain "example.com/taskservice/internal/domain/task"
 )
+
+//в этом файле я только добавил типы для периодов
 
 type Service struct {
 	repo Repository
@@ -31,6 +33,7 @@ func (s *Service) Create(ctx context.Context, input CreateInput) (*taskdomain.Ta
 		Title:       normalized.Title,
 		Description: normalized.Description,
 		Status:      normalized.Status,
+		PeriodConf:  normalized.PeriodConf,
 	}
 	now := s.now()
 	model.CreatedAt = now
@@ -67,6 +70,7 @@ func (s *Service) Update(ctx context.Context, id int64, input UpdateInput) (*tas
 		Title:       normalized.Title,
 		Description: normalized.Description,
 		Status:      normalized.Status,
+		PeriodConf:  normalized.PeriodConf,
 		UpdatedAt:   s.now(),
 	}
 
@@ -123,3 +127,7 @@ func validateUpdateInput(input UpdateInput) (UpdateInput, error) {
 
 	return input, nil
 }
+
+
+
+

@@ -20,6 +20,8 @@ func NewTaskHandler(usecase taskusecase.Usecase) *TaskHandler {
 	return &TaskHandler{usecase: usecase}
 }
 
+//в функции создания ничего не меняем, только добавляем новую строку с данными
+
 func (h *TaskHandler) Create(w http.ResponseWriter, r *http.Request) {
 	var req taskMutationDTO
 	if err := decodeJSON(r, &req); err != nil {
@@ -31,6 +33,7 @@ func (h *TaskHandler) Create(w http.ResponseWriter, r *http.Request) {
 		Title:       req.Title,
 		Description: req.Description,
 		Status:      req.Status,
+		PeriodConf:	 req.PeriodConf, //добавили строку с периодом
 	})
 	if err != nil {
 		writeUsecaseError(w, err)
@@ -56,6 +59,8 @@ func (h *TaskHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, newTaskDTO(task))
 }
 
+//не забываем про апдейт
+
 func (h *TaskHandler) Update(w http.ResponseWriter, r *http.Request) {
 	id, err := getIDFromRequest(r)
 	if err != nil {
@@ -73,6 +78,7 @@ func (h *TaskHandler) Update(w http.ResponseWriter, r *http.Request) {
 		Title:       req.Title,
 		Description: req.Description,
 		Status:      req.Status,
+		PeriodConf:	 req.PeriodConf,
 	})
 	if err != nil {
 		writeUsecaseError(w, err)

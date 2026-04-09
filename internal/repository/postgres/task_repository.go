@@ -3,12 +3,13 @@ package postgres
 import (
 	"context"
 	"errors"
-
+	"encoding/json"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	taskdomain "example.com/taskservice/internal/domain/task"
 )
+//в этом я добавил новый столбец в таблице для бд
 
 type Repository struct {
 	pool *pgxpool.Pool
@@ -19,13 +20,18 @@ func New(pool *pgxpool.Pool) *Repository {
 }
 
 func (r *Repository) Create(ctx context.Context, task *taskdomain.Task) (*taskdomain.Task, error) {
+	//здесь добавляем наш период в таблицу
 	const query = `
-		INSERT INTO tasks (title, description, status, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5)
-		RETURNING id, title, description, status, created_at, updated_at
+		INSERT INTO tasks (title, description, status, period_conf, created_at, updated_at) 
+		VALUES ($1, $2, $3, $4, $5, $6)
+		RETURNING id, title, description, status, period_conf, created_at, updated_at
 	`
+	var periodConfJSON []byte
+	if task.PeriodConf != nil {
+		periodConfJSON, _ = json.Marshal(task.PeriodConf)
+	}
 
-	row := r.pool.QueryRow(ctx, query, task.Title, task.Description, task.Status, task.CreatedAt, task.UpdatedAt)
+	row := r.pool.QueryRow(ctx, query, task.Title, task.Description, task.Status, periodConfJSON, task.CreatedAt, task.UpdatedAt)
 	created, err := scanTask(row)
 	if err != nil {
 		return nil, err
@@ -35,8 +41,9 @@ func (r *Repository) Create(ctx context.Context, task *taskdomain.Task) (*taskdo
 }
 
 func (r *Repository) GetByID(ctx context.Context, id int64) (*taskdomain.Task, error) {
+	//и здесь
 	const query = `
-		SELECT id, title, description, status, created_at, updated_at
+		SELECT id, title, description, status, period_conf, created_at, updated_at
 		FROM tasks
 		WHERE id = $1
 	`
@@ -55,17 +62,23 @@ func (r *Repository) GetByID(ctx context.Context, id int64) (*taskdomain.Task, e
 }
 
 func (r *Repository) Update(ctx context.Context, task *taskdomain.Task) (*taskdomain.Task, error) {
+	//и здесь тоже
 	const query = `
 		UPDATE tasks
 		SET title = $1,
 			description = $2,
 			status = $3,
-			updated_at = $4
-		WHERE id = $5
-		RETURNING id, title, description, status, created_at, updated_at
+			period_conf = $4,
+			updated_at = $5
+		WHERE id = $6
+		RETURNING id, title, description, status, period_conf, created_at, updated_at
 	`
+	var periodConfJSON []byte
+	if task.PeriodConf != nil {
+		periodConfJSON, _ = json.Marshal(task.PeriodConf)
+	}
 
-	row := r.pool.QueryRow(ctx, query, task.Title, task.Description, task.Status, task.UpdatedAt, task.ID)
+	row := r.pool.QueryRow(ctx, query, task.Title, task.Description, task.Status, periodConfJSON, task.UpdatedAt, task.ID)
 	updated, err := scanTask(row)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -94,8 +107,9 @@ func (r *Repository) Delete(ctx context.Context, id int64) error {
 }
 
 func (r *Repository) List(ctx context.Context) ([]taskdomain.Task, error) {
+	//здесь также
 	const query = `
-		SELECT id, title, description, status, created_at, updated_at
+		SELECT id, title, description, status, period_conf, created_at, updated_at
 		FROM tasks
 		ORDER BY id DESC
 	`
@@ -131,6 +145,7 @@ func scanTask(scanner taskScanner) (*taskdomain.Task, error) {
 	var (
 		task   taskdomain.Task
 		status string
+		rawPeriodConf []byte
 	)
 
 	if err := scanner.Scan(
@@ -138,6 +153,7 @@ func scanTask(scanner taskScanner) (*taskdomain.Task, error) {
 		&task.Title,
 		&task.Description,
 		&status,
+		&rawPeriodConf,
 		&task.CreatedAt,
 		&task.UpdatedAt,
 	); err != nil {
@@ -145,6 +161,16 @@ func scanTask(scanner taskScanner) (*taskdomain.Task, error) {
 	}
 
 	task.Status = taskdomain.Status(status)
+
+	//делаем проверку на пустой период
+
+	if rawPeriodConf != nil {
+		var pc taskdomain.PeriodConf
+		if err := json.Unmarshal(rawPeriodConf, &pc); err != nil {
+			return nil, err
+		}
+		task.PeriodConf = &pc
+	}
 
 	return &task, nil
 }
