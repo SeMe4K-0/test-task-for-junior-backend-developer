@@ -60,3 +60,4 @@
 5) **router.go** создана *api.HandleFunc* с новым путем *"/tasks/batch"* т.к. нельзя несколько одинаковых методов положить в 1 путь
 6) **task_repository.go** создана *func CreatePereodic* для добавления данных в бд
 7) **openapi.json** созданы, *"/api/v1/tasks/batch"* с новым *post* и *schema* с *"CreatePereodicTaskRequest"* для того, чтобы правильно принять входные данные.
+123
