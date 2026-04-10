@@ -169,6 +169,14 @@
             "type": "string",
             "enum": ["new", "in_progress", "done"],
             "example": "new"
+          },
+          "due_date": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2026-03-24T00:00:00Z"
+          },
+          "recurrence": {
+            "$ref": "#/components/schemas/Recurrence"
           }
         }
       },
@@ -188,6 +196,14 @@
             "type": "string",
             "enum": ["new", "in_progress", "done"],
             "example": "in_progress"
+          },
+          "due_date": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2026-03-24T00:00:00Z"
+          },
+          "recurrence": {
+            "$ref": "#/components/schemas/Recurrence"
           }
         }
       },
@@ -205,6 +221,14 @@
             "enum": ["new", "in_progress", "done"],
             "example": "new"
           },
+          "due_date": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2026-03-24T00:00:00Z"
+          },
+          "recurrence": {
+            "$ref": "#/components/schemas/Recurrence"
+          },
           "created_at": {
             "type": "string",
             "format": "date-time",
@@ -214,6 +238,34 @@
             "type": "string",
             "format": "date-time",
             "example": "2026-03-24T00:00:00Z"
+          }
+        }
+      },
+      "Recurrence": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": ["daily", "monthly", "specific_dates", "parity"],
+            "example": "daily"
+          },
+          "interval_days": {
+            "type": "integer",
+            "example": 2
+          },
+          "month_day": {
+            "type": "integer",
+            "example": 15
+          },
+          "specific_dates": {
+            "type": "array",
+            "items": { "type": "string", "format": "date" },
+            "example": ["2026-05-01", "2026-05-15"]
+          },
+          "parity": {
+            "type": "string",
+            "enum": ["even", "odd"],
+            "example": "even"
           }
         }
       },
