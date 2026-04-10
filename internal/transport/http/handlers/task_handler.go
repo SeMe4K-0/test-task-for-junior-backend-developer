@@ -5,24 +5,47 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"strings"
+	"time"
 
 	"github.com/gorilla/mux"
+	"go.uber.org/zap"
 
 	taskdomain "example.com/taskservice/internal/domain/task"
+	"example.com/taskservice/internal/infrastructure/logger"
 	taskusecase "example.com/taskservice/internal/usecase/task"
 )
 
 type TaskHandler struct {
 	usecase taskusecase.Usecase
+	logger  logger.Logger
 }
 
-func NewTaskHandler(usecase taskusecase.Usecase) *TaskHandler {
-	return &TaskHandler{usecase: usecase}
+func NewTaskHandler(usecase taskusecase.Usecase, logger logger.Logger) *TaskHandler {
+	return &TaskHandler{
+		usecase: usecase,
+		logger:  logger,
+	}
 }
 
 func (h *TaskHandler) Create(w http.ResponseWriter, r *http.Request) {
+	h.logger.Info("HTTP request: Create task",
+		zap.String("method", r.Method),
+		zap.String("path", r.URL.Path))
+
 	var req taskMutationDTO
 	if err := decodeJSON(r, &req); err != nil {
+		h.logger.Error("Failed to decode JSON request",
+			zap.Error(err))
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+
+	dueDate, err := parseOptionalDate(req.DueDate)
+	if err != nil {
+		h.logger.Error("Failed to parse due date",
+			zap.Error(err),
+			zap.String("due_date", *req.DueDate))
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
@@ -31,12 +54,20 @@ func (h *TaskHandler) Create(w http.ResponseWriter, r *http.Request) {
 		Title:       req.Title,
 		Description: req.Description,
 		Status:      req.Status,
+		DueDate:     dueDate,
+		Recurrence:  req.Recurrence,
 	})
 	if err != nil {
+		h.logger.Error("Failed to create task via usecase",
+			zap.Error(err),
+			zap.String("title", req.Title))
 		writeUsecaseError(w, err)
 		return
 	}
 
+	h.logger.Info("Task created successfully via HTTP",
+		zap.Int64("task_id", created.ID),
+		zap.String("title", created.Title))
 	writeJSON(w, http.StatusCreated, newTaskDTO(created))
 }
 
@@ -69,10 +100,18 @@ func (h *TaskHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	dueDate, err := parseOptionalDate(req.DueDate)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+
 	updated, err := h.usecase.Update(r.Context(), id, taskusecase.UpdateInput{
 		Title:       req.Title,
 		Description: req.Description,
 		Status:      req.Status,
+		DueDate:     dueDate,
+		Recurrence:  req.Recurrence,
 	})
 	if err != nil {
 		writeUsecaseError(w, err)
@@ -128,6 +167,25 @@ func getIDFromRequest(r *http.Request) (int64, error) {
 	}
 
 	return id, nil
+}
+
+func parseOptionalDate(raw *string) (*time.Time, error) {
+	if raw == nil || strings.TrimSpace(*raw) == "" {
+		return nil, nil
+	}
+
+	value := strings.TrimSpace(*raw)
+	if t, err := time.Parse("2006-01-02", value); err == nil {
+		utc := t.UTC()
+		return &utc, nil
+	}
+
+	if t, err := time.Parse(time.RFC3339, value); err == nil {
+		utc := t.UTC()
+		return &utc, nil
+	}
+
+	return nil, errors.New("invalid due_date format")
 }
 
 func decodeJSON(r *http.Request, dst any) error {
