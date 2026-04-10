@@ -1,9 +1,8 @@
 package task
 
-import "time"
-
 import (
 	"context"
+	"time"
 
 	taskdomain "example.com/taskservice/internal/domain/task"
 )
@@ -49,6 +48,8 @@ type CreatePereodicInput struct {
 	Description string
 	Status      taskdomain.Status
 	//
-	Repetition  int
-	DateAndTime time.Time
+	Repetition int
+	RecurrType taskdomain.Recurr
+	DayAmount  int
+	StartDate  time.Time
 }

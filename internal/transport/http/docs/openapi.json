@@ -263,6 +263,19 @@
           "repetition":{
             "type": "int",
             "example": 1
+          },
+          "recurrtype":{
+            "type": "string",
+            "example": "every_n_day"
+          },
+          "dayamount":{
+            "type": "int",
+            "example": 1
+          },
+          "startdate":{
+            "type": "string",
+            "format": "date-time",
+            "example": "2026-03-24T00:00:00Z"
           }
         }
       },

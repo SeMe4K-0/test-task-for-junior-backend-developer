@@ -127,7 +127,11 @@ func (h *TaskHandler) CreatePereodic(w http.ResponseWriter, r *http.Request) {
 		Title:       req.Title,
 		Description: req.Description,
 		Status:      req.Status,
-		Repetition:  req.Repetition,
+
+		Repetition: req.Repetition,
+		RecurrType: req.RecurrType,
+		DayAmount:  req.DayAmount,
+		StartDate:  req.StartDate,
 	})
 	if err != nil {
 		writeUsecaseError(w, err)

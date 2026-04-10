@@ -19,6 +19,14 @@ type Task struct {
 	UpdatedAt   time.Time `json:"updated_at"`
 }
 
+type Recurr string
+
+const (
+	OnceNDay     Recurr = "every_n_day"
+	OnceOtherDay Recurr = "other_day"
+	OnceAMonth   Recurr = "monthly"
+)
+
 func (s Status) Valid() bool {
 	switch s {
 	case StatusNew, StatusInProgress, StatusDone:

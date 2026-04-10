@@ -138,6 +138,8 @@ func (s *Service) CreatePereodic(ctx context.Context, input CreatePereodicInput)
 	model.CreatedAt = now
 	model.UpdatedAt = now
 
+	//
+
 	created, err := s.repo.CreatePereodic(ctx, model)
 	if err != nil {
 		return nil, err
@@ -159,9 +161,31 @@ func validateCreatePereodicInput(input CreatePereodicInput) (CreatePereodicInput
 	input.Title = strings.TrimSpace(input.Title)
 	input.Description = strings.TrimSpace(input.Description)
 
-	if input.Repetition < 0 {
-		return CreatePereodicInput{}, fmt.Errorf("%w: invalid repetition", ErrInvalidInput)
+	//
+	if input.Repetition < 1 {
+		//return CreatePereodicInput{}, fmt.Errorf("%w: invalid repetition", ErrInvalidInput)
+		input.Repetition = 1
 	}
+
+	if input.DayAmount < 1 {
+		//return CreatePereodicInput{}, fmt.Errorf("%w: invalid DayAmount", ErrInvalidInput)
+		input.DayAmount = 1
+	}
+
+	switch input.RecurrType {
+	case taskdomain.OnceNDay, taskdomain.OnceOtherDay, taskdomain.OnceAMonth:
+		//valid
+	default:
+		//return CreatePereodicInput{}, fmt.Errorf("%w: invalid RecurrType", ErrInvalidInput)
+		input.RecurrType = taskdomain.OnceNDay
+	}
+
+	if input.StartDate.IsZero() {
+		//return CreatePereodicInput{}, fmt.Errorf("%w: invalid StartDate", ErrInvalidInput)
+		input.StartDate = time.Now()
+	}
+
+	//
 
 	if input.Title == "" {
 		return CreatePereodicInput{}, fmt.Errorf("%w: title is required", ErrInvalidInput)
