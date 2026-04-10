@@ -1,3 +1,4 @@
 .ruby-lsp
 coverage.html
 coverage.out
+.DS_Store
