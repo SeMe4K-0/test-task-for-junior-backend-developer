@@ -1,12 +1,15 @@
+version: '3.8'
+
 services:
   postgres:
     image: postgres:16-alpine
+    container_name: taskservice-postgres
     environment:
       POSTGRES_DB: taskservice
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
     ports:
-      - "5432:5432"
+      - "5433:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d taskservice"]
       interval: 5s
@@ -15,19 +18,145 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./migrations/0001_create_tasks.up.sql:/docker-entrypoint-initdb.d/001_create_tasks.sql:ro
+    networks:
+      - taskservice-network
 
   app:
     build:
       context: .
       dockerfile: Dockerfile
+    container_name: taskservice-app
     environment:
       HTTP_ADDR: :8080
       DATABASE_DSN: postgres://postgres:postgres@postgres:5432/taskservice?sslmode=disable
+      LOG_LEVEL: info
     ports:
       - "8080:8080"
     depends_on:
       postgres:
         condition: service_healthy
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - taskservice-network
+
+  # Loki - сборщик логов
+  loki:
+    image: grafana/loki:2.8.2
+    container_name: taskservice-loki
+    ports:
+      - "3100:3100"
+    volumes:
+      - loki_data:/loki
+      - ./observability/loki-config.yml:/etc/loki/local-config.yaml
+    command: -config.file=/etc/loki/local-config.yaml
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3100/ready || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - taskservice-network
+
+  # VictoriaMetrics - хранилище метрик
+  victoriametrics:
+    image: victoriametrics/victoria-metrics:v1.101.0
+    container_name: taskservice-victoriametrics
+    ports:
+      - "8428:8428"
+    volumes:
+      - victoriametrics_data:/storage
+    command:
+      - -storageDataPath=/storage
+      - -httpListenAddr=:8428
+      - -retentionPeriod=1y
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:8428/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - taskservice-network
+
+  # Prometheus-compatible scraper for VictoriaMetrics
+  vmagent:
+    image: victoriametrics/vmagent:v1.101.0
+    container_name: taskservice-vmagent
+    volumes:
+      - ./observability/vmagent-config.yml:/etc/vmagent/config.yml:ro
+    command:
+      - -promscrape.config=/etc/vmagent/config.yml
+      - -remoteWrite.url=http://victoriametrics:8428/api/v1/write
+    depends_on:
+      - app
+      - victoriametrics
+    networks:
+      - taskservice-network
+
+  # Promtail - агент для отправки логов в Loki
+  promtail:
+    image: grafana/promtail:3.0.0
+    container_name: taskservice-promtail
+    volumes:
+      - ./observability/promtail-config.yml:/etc/promtail/config.yml:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: -config.file=/etc/promtail/config.yml
+    depends_on:
+      - loki
+    networks:
+      - taskservice-network
+
+  # PGAdmin for PostgreSQL management
+  pgadmin:
+    image: dpage/pgadmin4:7.0
+    container_name: taskservice-pgadmin
+    ports:
+      - "5050:80"
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@local
+      PGADMIN_DEFAULT_PASSWORD: admin
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    depends_on:
+      - postgres
+    networks:
+      - taskservice-network
+
+  # Grafana - визуализация
+  grafana:
+    image: grafana/grafana:10.4.0
+    container_name: taskservice-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      - victoriametrics
+      - loki
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3000/api/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - taskservice-network
 
 volumes:
   postgres_data:
+  loki_data:
+  victoriametrics_data:
+  grafana_data:
+  pgadmin_data:
+
+networks:
+  taskservice-network:
+    driver: bridge
