@@ -2,7 +2,7 @@ package main
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"log/slog"
 	"net/http"
 	"os"
@@ -16,6 +16,7 @@ import (
 	swaggerdocs "example.com/taskservice/internal/transport/http/docs"
 	httphandlers "example.com/taskservice/internal/transport/http/handlers"
 	"example.com/taskservice/internal/usecase/task"
+	"github.com/rs/cors"
 )
 
 func main() {
@@ -41,11 +42,20 @@ func main() {
 	docsHandler := swaggerdocs.NewHandler()
 	router := transporthttp.NewRouter(taskHandler, docsHandler)
 
+	corsMiddleware := cors.New(cors.Options{
+        AllowedOrigins:   []string{"*"}, // Для разработки можно оставить *, для продакшена лучше указать домен
+        AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+        AllowedHeaders:   []string{"Content-Type", "Authorization"},
+        AllowCredentials: true,
+    })
+
 	server := &http.Server{
 		Addr:              cfg.HTTPAddr,
-		Handler:           router,
+		Handler:           corsMiddleware.Handler(router),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
+
+
 
 	go func() {
 		<-ctx.Done()
@@ -78,7 +88,7 @@ func loadConfig() config {
 	}
 
 	if cfg.DatabaseDSN == "" {
-		panic(fmt.Errorf("DATABASE_DSN is required"))
+		panic(errors.New("DATABASE_DSN is required"))
 	}
 
 	return cfg
