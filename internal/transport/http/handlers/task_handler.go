@@ -27,10 +27,25 @@ func (h *TaskHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var recurrenceConfig *taskdomain.RecurrenceConfig
+	if req.Recurrence != nil {
+		recurrenceConfig = &taskdomain.RecurrenceConfig{
+			Type:      req.Recurrence.Type,
+			Interval:  req.Recurrence.Interval,
+			Day:       req.Recurrence.Day,
+			Dates:     req.Recurrence.Dates,
+			Parity:    req.Recurrence.Parity,
+			StartDate: req.Recurrence.StartDate,
+			EndDate:   req.Recurrence.EndDate,
+		}
+	}
+
 	created, err := h.usecase.Create(r.Context(), taskusecase.CreateInput{
-		Title:       req.Title,
-		Description: req.Description,
-		Status:      req.Status,
+		Title:            req.Title,
+		Description:      req.Description,
+		Status:           req.Status,
+		DueDate:          req.DueDate,
+		RecurrenceConfig: recurrenceConfig,
 	})
 	if err != nil {
 		writeUsecaseError(w, err)
@@ -73,6 +88,7 @@ func (h *TaskHandler) Update(w http.ResponseWriter, r *http.Request) {
 		Title:       req.Title,
 		Description: req.Description,
 		Status:      req.Status,
+		DueDate:     req.DueDate,
 	})
 	if err != nil {
 		writeUsecaseError(w, err)

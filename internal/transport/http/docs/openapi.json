@@ -153,6 +153,46 @@
       }
     },
     "schemas": {
+      "Recurrence": {
+        "type": "object",
+        "required": ["type", "start_date", "end_date"],
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": ["daily", "monthly", "specific_dates", "parity"],
+            "example": "daily"
+          },
+          "interval": {
+            "type": "integer",
+            "description": "For daily: every N-th day",
+            "example": 2
+          },
+          "day": {
+            "type": "integer",
+            "description": "For monthly: specific day of month (1-31)",
+            "example": 15
+          },
+          "dates": {
+            "type": "array",
+            "items": { "type": "string", "format": "date-time" }
+          },
+          "parity": {
+            "type": "string",
+            "enum": ["even", "odd"],
+            "example": "even"
+          },
+          "start_date": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2026-04-10T00:00:00Z"
+          },
+          "end_date": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2026-05-10T00:00:00Z"
+          }
+        }
+      },
       "CreateTaskRequest": {
         "type": "object",
         "required": ["title"],
@@ -169,6 +209,13 @@
             "type": "string",
             "enum": ["new", "in_progress", "done"],
             "example": "new"
+          },
+          "due_date": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "recurrence": {
+            "$ref": "#/components/schemas/Recurrence"
           }
         }
       },
@@ -188,6 +235,10 @@
             "type": "string",
             "enum": ["new", "in_progress", "done"],
             "example": "in_progress"
+          },
+          "due_date": {
+            "type": "string",
+            "format": "date-time"
           }
         }
       },
@@ -204,6 +255,20 @@
             "type": "string",
             "enum": ["new", "in_progress", "done"],
             "example": "new"
+          },
+          "due_date": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "is_template": {
+            "type": "boolean"
+          },
+          "parent_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "recurrence_config": {
+            "$ref": "#/components/schemas/Recurrence"
           },
           "created_at": {
             "type": "string",
