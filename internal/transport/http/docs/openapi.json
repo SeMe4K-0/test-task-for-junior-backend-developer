@@ -3,7 +3,7 @@
   "info": {
     "title": "Task Service API",
     "version": "1.0.0",
-    "description": "CRUD API for tasks built with clean architecture."
+    "description": "CRUD API for tasks with optional periodicity."
   },
   "servers": [
     {
@@ -169,6 +169,9 @@
             "type": "string",
             "enum": ["new", "in_progress", "done"],
             "example": "new"
+          },
+          "period_conf": {
+            "$ref": "#/components/schemas/PeriodConf"
           }
         }
       },
@@ -188,6 +191,9 @@
             "type": "string",
             "enum": ["new", "in_progress", "done"],
             "example": "in_progress"
+          },
+          "period_conf": {
+            "$ref": "#/components/schemas/PeriodConf"
           }
         }
       },
@@ -214,6 +220,49 @@
             "type": "string",
             "format": "date-time",
             "example": "2026-03-24T00:00:00Z"
+          },
+          "period_conf": {
+            "$ref": "#/components/schemas/PeriodConf"
+          },
+          "scheduled_date": {
+            "type": "string",
+            "format": "date",
+            "example": "2026-04-15"
+          }
+        }
+      },
+      "PeriodConf": {
+        "type": "object",
+        "required": ["type"],
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": ["daily", "monthly", "specific", "even_odd"],
+            "example": "daily"
+          },
+          "interval_days": {
+            "type": "integer",
+            "example": 1,
+            "description": "For 'daily': interval in days (>=1)"
+          },
+          "month_day": {
+            "type": "integer",
+            "example": 15,
+            "description": "For 'monthly': day of month (1-30)"
+          },
+          "specific_dates": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "date"
+            },
+            "description": "For 'specific': list of exact dates (YYYY-MM-DD)"
+          },
+          "even_odd_type": {
+            "type": "string",
+            "enum": ["even", "odd"],
+            "example": "even",
+            "description": "For 'even_odd': parity of the day"
           }
         }
       },
