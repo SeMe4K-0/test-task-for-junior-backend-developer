@@ -27,11 +27,16 @@ func (h *TaskHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	created, err := h.usecase.Create(r.Context(), taskusecase.CreateInput{
+	input := taskusecase.CreateInput{
 		Title:       req.Title,
 		Description: req.Description,
 		Status:      req.Status,
-	})
+	}
+	if req.ScheduledDate != nil {
+		input.ScheduledDate = &req.ScheduledDate.Time
+	}
+
+	created, err := h.usecase.Create(r.Context(), input)
 	if err != nil {
 		writeUsecaseError(w, err)
 		return
@@ -110,6 +115,43 @@ func (h *TaskHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, response)
+}
+
+// CreateRecurring handles POST /api/v1/tasks/recurring.
+// It generates and persists one task per date produced by the recurrence rule,
+// then returns the full list of created tasks.
+func (h *TaskHandler) CreateRecurring(w http.ResponseWriter, r *http.Request) {
+	var req createRecurringTaskDTO
+	if err := decodeJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+
+	input := taskusecase.CreateRecurringInput{
+		Title:       req.Title,
+		Description: req.Description,
+		Status:      req.Status,
+		Recurrence:  toDomainRecurrence(req.Recurrence),
+	}
+	if req.StartDate != nil {
+		input.StartDate = req.StartDate.Time
+	}
+	if req.EndDate != nil {
+		input.EndDate = req.EndDate.Time
+	}
+
+	tasks, err := h.usecase.CreateRecurring(r.Context(), input)
+	if err != nil {
+		writeUsecaseError(w, err)
+		return
+	}
+
+	response := make([]taskDTO, 0, len(tasks))
+	for _, t := range tasks {
+		response = append(response, newTaskDTO(t))
+	}
+
+	writeJSON(w, http.StatusCreated, response)
 }
 
 func getIDFromRequest(r *http.Request) (int64, error) {
