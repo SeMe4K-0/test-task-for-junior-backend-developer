@@ -15,8 +15,12 @@ type Task struct {
 	Title       string    `json:"title"`
 	Description string    `json:"description"`
 	Status      Status    `json:"status"`
-	CreatedAt   time.Time `json:"created_at"`
-	UpdatedAt   time.Time `json:"updated_at"`
+	// ScheduledDate is the calendar date this task is assigned to.
+	// Nil for tasks created without a recurrence schedule.
+	ScheduledDate *time.Time  `json:"scheduled_date,omitempty"`
+	Recurrence    *Recurrence `json:"recurrence,omitempty"`
+	CreatedAt     time.Time   `json:"created_at"`
+	UpdatedAt     time.Time   `json:"updated_at"`
 }
 
 func (s Status) Valid() bool {

@@ -20,6 +20,10 @@ func NewRouter(taskHandler *httphandlers.TaskHandler, docsHandler *swaggerdocs.H
 
 	api.HandleFunc("/tasks", taskHandler.Create).Methods(http.MethodPost)
 	api.HandleFunc("/tasks", taskHandler.List).Methods(http.MethodGet)
+	// /tasks/recurring must be registered before /tasks/{id} to avoid any
+	// ambiguity with future gorilla/mux versions, even though the [0-9]+ pattern
+	// already excludes the literal string "recurring".
+	api.HandleFunc("/tasks/recurring", taskHandler.CreateRecurring).Methods(http.MethodPost)
 	api.HandleFunc("/tasks/{id:[0-9]+}", taskHandler.GetByID).Methods(http.MethodGet)
 	api.HandleFunc("/tasks/{id:[0-9]+}", taskHandler.Update).Methods(http.MethodPut)
 	api.HandleFunc("/tasks/{id:[0-9]+}", taskHandler.Delete).Methods(http.MethodDelete)

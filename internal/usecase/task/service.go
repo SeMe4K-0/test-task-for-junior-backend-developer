@@ -27,21 +27,17 @@ func (s *Service) Create(ctx context.Context, input CreateInput) (*taskdomain.Ta
 		return nil, err
 	}
 
-	model := &taskdomain.Task{
-		Title:       normalized.Title,
-		Description: normalized.Description,
-		Status:      normalized.Status,
-	}
 	now := s.now()
-	model.CreatedAt = now
-	model.UpdatedAt = now
-
-	created, err := s.repo.Create(ctx, model)
-	if err != nil {
-		return nil, err
+	model := &taskdomain.Task{
+		Title:         normalized.Title,
+		Description:   normalized.Description,
+		Status:        normalized.Status,
+		ScheduledDate: normalized.ScheduledDate,
+		CreatedAt:     now,
+		UpdatedAt:     now,
 	}
 
-	return created, nil
+	return s.repo.Create(ctx, model)
 }
 
 func (s *Service) GetByID(ctx context.Context, id int64) (*taskdomain.Task, error) {
@@ -70,12 +66,7 @@ func (s *Service) Update(ctx context.Context, id int64, input UpdateInput) (*tas
 		UpdatedAt:   s.now(),
 	}
 
-	updated, err := s.repo.Update(ctx, model)
-	if err != nil {
-		return nil, err
-	}
-
-	return updated, nil
+	return s.repo.Update(ctx, model)
 }
 
 func (s *Service) Delete(ctx context.Context, id int64) error {
@@ -88,6 +79,81 @@ func (s *Service) Delete(ctx context.Context, id int64) error {
 
 func (s *Service) List(ctx context.Context) ([]taskdomain.Task, error) {
 	return s.repo.List(ctx)
+}
+
+// CreateRecurring generates task instances for every date produced by the
+// recurrence rule and persists them in a single pass.
+//
+// Each instance is an independent task — it can be completed, edited, or deleted
+// individually. The recurrence settings are stored on every instance so the
+// original schedule is always visible.
+func (s *Service) CreateRecurring(ctx context.Context, input CreateRecurringInput) ([]*taskdomain.Task, error) {
+	input.Title = strings.TrimSpace(input.Title)
+	input.Description = strings.TrimSpace(input.Description)
+
+	if input.Title == "" {
+		return nil, fmt.Errorf("%w: title is required", ErrInvalidInput)
+	}
+
+	if input.Status == "" {
+		input.Status = taskdomain.StatusNew
+	}
+
+	if !input.Status.Valid() {
+		return nil, fmt.Errorf("%w: invalid status", ErrInvalidInput)
+	}
+
+	if err := input.Recurrence.Validate(); err != nil {
+		return nil, fmt.Errorf("%w: %s", ErrInvalidInput, err)
+	}
+
+	if input.Recurrence.Type != taskdomain.RecurrenceTypeDates {
+		if err := validateDateRange(input.StartDate, input.EndDate); err != nil {
+			return nil, fmt.Errorf("%w: %s", ErrInvalidInput, err)
+		}
+	}
+
+	dates := input.Recurrence.GenerateDates(input.StartDate, input.EndDate)
+	if len(dates) == 0 {
+		return nil, fmt.Errorf("%w: recurrence produced no dates in the given range", ErrInvalidInput)
+	}
+
+	recurrence := input.Recurrence
+	now := s.now()
+
+	tasks := make([]*taskdomain.Task, 0, len(dates))
+	for _, d := range dates {
+		scheduledDate := d
+		model := &taskdomain.Task{
+			Title:         input.Title,
+			Description:   input.Description,
+			Status:        input.Status,
+			ScheduledDate: &scheduledDate,
+			Recurrence:    &recurrence,
+			CreatedAt:     now,
+			UpdatedAt:     now,
+		}
+		created, err := s.repo.Create(ctx, model)
+		if err != nil {
+			return nil, err
+		}
+		tasks = append(tasks, created)
+	}
+
+	return tasks, nil
+}
+
+func validateDateRange(start, end time.Time) error {
+	if start.IsZero() || end.IsZero() {
+		return fmt.Errorf("start_date and end_date are required")
+	}
+	if end.Before(start) {
+		return fmt.Errorf("end_date must not be before start_date")
+	}
+	if int(end.Sub(start).Hours()/24) > taskdomain.MaxDateRangeDays {
+		return fmt.Errorf("date range must not exceed %d days", taskdomain.MaxDateRangeDays)
+	}
+	return nil
 }
 
 func validateCreateInput(input CreateInput) (CreateInput, error) {
