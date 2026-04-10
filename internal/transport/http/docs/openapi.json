@@ -59,6 +59,34 @@
         }
       }
     },
+    "/api/v1/tasks/{date}": {
+      "get": {
+        "tags": ["Tasks"],
+        "summary": "Get task by date",
+        "parameters": [
+          {
+            "name": "date",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "example": "2026-03-24"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Tasks Got",
+            "content": {
+              "application/json":{
+                "schema":{"$ref": "#/components/schemas/Task"}
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/tasks/{id}": {
       "get": {
         "tags": ["Tasks"],
@@ -169,7 +197,13 @@
             "type": "string",
             "enum": ["new", "in_progress", "done"],
             "example": "new"
-          }
+          },
+          "start_date": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2026-03-24T00:00:00Z"
+          },
+          "recurrence" : {"$ref" : "#/components/schemas/Recurrence"}
         }
       },
       "UpdateTaskRequest": {
@@ -188,7 +222,13 @@
             "type": "string",
             "enum": ["new", "in_progress", "done"],
             "example": "in_progress"
-          }
+          },
+          "start_date": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2026-03-24T00:00:00Z"
+          },
+          "recurrence" : {"$ref" : "#/components/schemas/Recurrence"}
         }
       },
       "Task": {
@@ -211,6 +251,51 @@
             "example": "2026-03-24T00:00:00Z"
           },
           "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2026-03-24T00:00:00Z"
+          },
+          "start_date": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2026-03-24T00:00:00Z"
+          }
+        }
+      },
+      "Recurrence":{
+        "type": "object",
+        "properties": {
+          "rec_type": {
+            "type": "string",
+            "enum": [
+              "none", "daily",
+              "monthly", "parity", "specific"
+            ],
+            "example": "monthly"
+          },
+          "interval": {
+            "type": "integer",
+            "format": "int64",
+            "example": 5
+          },
+          "month_day": {
+            "type": "integer",
+            "format": "int64",
+            "example": 28
+          },
+          "spec_dates": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "date-time",
+              "example": "2026-03-24T00:00:00Z"
+            }
+          },
+          "parity": {
+            "type": "boolean",
+            "example": true
+          },
+          "end_date": {
             "type": "string",
             "format": "date-time",
             "example": "2026-03-24T00:00:00Z"

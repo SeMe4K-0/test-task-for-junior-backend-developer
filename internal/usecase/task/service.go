@@ -9,6 +9,8 @@ import (
 	taskdomain "example.com/taskservice/internal/domain/task"
 )
 
+var zeroDatetime time.Time
+
 type Service struct {
 	repo Repository
 	now  func() time.Time
@@ -28,9 +30,11 @@ func (s *Service) Create(ctx context.Context, input CreateInput) (*taskdomain.Ta
 	}
 
 	model := &taskdomain.Task{
-		Title:       normalized.Title,
-		Description: normalized.Description,
-		Status:      normalized.Status,
+		Title:         normalized.Title,
+		Description:   normalized.Description,
+		Status:        normalized.Status,
+		Rec:           normalized.Rec,
+		StartDateTime: normalized.StartDateTime,
 	}
 	now := s.now()
 	model.CreatedAt = now
@@ -52,6 +56,20 @@ func (s *Service) GetByID(ctx context.Context, id int64) (*taskdomain.Task, erro
 	return s.repo.GetByID(ctx, id)
 }
 
+func (s *Service) GetByDate(ctx context.Context, date time.Time) ([]taskdomain.Task, error) {
+	tasks, err := s.repo.List(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("list: %w", err)
+	}
+	activeTasks := make([]taskdomain.Task, 0)
+	for _, task := range tasks {
+		if task.IsTaskActiveOn(date) {
+			activeTasks = append(activeTasks, task)
+		}
+	}
+	return activeTasks, nil
+}
+
 func (s *Service) Update(ctx context.Context, id int64, input UpdateInput) (*taskdomain.Task, error) {
 	if id <= 0 {
 		return nil, fmt.Errorf("%w: id must be positive", ErrInvalidInput)
@@ -63,11 +81,17 @@ func (s *Service) Update(ctx context.Context, id int64, input UpdateInput) (*tas
 	}
 
 	model := &taskdomain.Task{
-		ID:          id,
-		Title:       normalized.Title,
-		Description: normalized.Description,
-		Status:      normalized.Status,
-		UpdatedAt:   s.now(),
+		ID:            id,
+		Title:         normalized.Title,
+		Description:   normalized.Description,
+		Status:        normalized.Status,
+		StartDateTime: normalized.StartDateTime,
+		Rec:           input.Rec,
+		UpdatedAt:     s.now(),
+	}
+
+	if model.StartDateTime.IsZero() {
+		model.StartDateTime = s.now()
 	}
 
 	updated, err := s.repo.Update(ctx, model)
@@ -98,8 +122,16 @@ func validateCreateInput(input CreateInput) (CreateInput, error) {
 		return CreateInput{}, fmt.Errorf("%w: title is required", ErrInvalidInput)
 	}
 
+	if input.StartDateTime.IsZero() {
+		input.StartDateTime = time.Now().UTC()
+	}
+
 	if input.Status == "" {
 		input.Status = taskdomain.StatusNew
+	}
+
+	if !input.Rec.Type.Valid() {
+		return CreateInput{}, fmt.Errorf("%w: invalid recurrence type", ErrInvalidInput)
 	}
 
 	if !input.Status.Valid() {
@@ -115,6 +147,10 @@ func validateUpdateInput(input UpdateInput) (UpdateInput, error) {
 
 	if input.Title == "" {
 		return UpdateInput{}, fmt.Errorf("%w: title is required", ErrInvalidInput)
+	}
+
+	if input.StartDateTime.Equal(zeroDatetime) {
+		input.StartDateTime = time.Now().UTC()
 	}
 
 	if !input.Status.Valid() {
