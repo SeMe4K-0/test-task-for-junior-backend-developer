@@ -10,6 +10,9 @@ import (
 	"syscall"
 	"time"
 
+	"go.uber.org/zap"
+
+	"example.com/taskservice/internal/infrastructure/logger"
 	infrastructurepostgres "example.com/taskservice/internal/infrastructure/postgres"
 	postgresrepo "example.com/taskservice/internal/repository/postgres"
 	transporthttp "example.com/taskservice/internal/transport/http"
@@ -19,9 +22,11 @@ import (
 )
 
 func main() {
-	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
-		Level: slog.LevelInfo,
-	}))
+	zapLogger, err := logger.NewZapLogger(getEnv("LOG_LEVEL", "info"))
+	if err != nil {
+		slog.Error("Failed to initialize logger", "error", err)
+		os.Exit(1)
+	}
 
 	cfg := loadConfig()
 
@@ -30,14 +35,14 @@ func main() {
 
 	pool, err := infrastructurepostgres.Open(ctx, cfg.DatabaseDSN)
 	if err != nil {
-		logger.Error("open postgres", "error", err)
+		zapLogger.Error("Failed to open postgres connection", zap.Error(err))
 		os.Exit(1)
 	}
 	defer pool.Close()
 
-	taskRepo := postgresrepo.New(pool)
-	taskUsecase := task.NewService(taskRepo)
-	taskHandler := httphandlers.NewTaskHandler(taskUsecase)
+	taskRepo := postgresrepo.New(pool, zapLogger)
+	taskUsecase := task.NewService(taskRepo, zapLogger)
+	taskHandler := httphandlers.NewTaskHandler(taskUsecase, zapLogger)
 	docsHandler := swaggerdocs.NewHandler()
 	router := transporthttp.NewRouter(taskHandler, docsHandler)
 
@@ -54,14 +59,14 @@ func main() {
 		defer cancel()
 
 		if err := server.Shutdown(shutdownCtx); err != nil {
-			logger.Error("shutdown http server", "error", err)
+			zapLogger.Error("shutdown http server", zap.Error(err))
 		}
 	}()
 
-	logger.Info("http server started", "addr", cfg.HTTPAddr)
+	zapLogger.Info("http server started", zap.String("addr", cfg.HTTPAddr))
 
 	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-		logger.Error("listen and serve", "error", err)
+		zapLogger.Error("listen and serve", zap.Error(err))
 		os.Exit(1)
 	}
 }
@@ -85,6 +90,14 @@ func loadConfig() config {
 }
 
 func envOrDefault(key, fallback string) string {
+	if value := os.Getenv(key); value != "" {
+		return value
+	}
+
+	return fallback
+}
+
+func getEnv(key, fallback string) string {
 	if value := os.Getenv(key); value != "" {
 		return value
 	}
