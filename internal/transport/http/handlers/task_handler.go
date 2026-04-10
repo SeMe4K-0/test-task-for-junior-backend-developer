@@ -3,8 +3,10 @@ package handlers
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/gorilla/mux"
 
@@ -28,9 +30,11 @@ func (h *TaskHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	created, err := h.usecase.Create(r.Context(), taskusecase.CreateInput{
-		Title:       req.Title,
-		Description: req.Description,
-		Status:      req.Status,
+		Title:         req.Title,
+		Description:   req.Description,
+		Status:        req.Status,
+		StartDateTime: req.StartDateTime,
+		Rec:           req.Rec,
 	})
 	if err != nil {
 		writeUsecaseError(w, err)
@@ -56,6 +60,26 @@ func (h *TaskHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, newTaskDTO(task))
 }
 
+func (h *TaskHandler) GetByDate(w http.ResponseWriter, r *http.Request) {
+	date, err := getDateFromRequest(r)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	fmt.Println("date:", date)
+
+	tasks, err := h.usecase.GetByDate(r.Context(), date)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	response := make([]taskDTO, 0, len(tasks))
+	for i := range tasks {
+		response = append(response, newTaskDTO(&tasks[i]))
+	}
+	writeJSON(w, http.StatusOK, response)
+}
+
 func (h *TaskHandler) Update(w http.ResponseWriter, r *http.Request) {
 	id, err := getIDFromRequest(r)
 	if err != nil {
@@ -70,9 +94,11 @@ func (h *TaskHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	updated, err := h.usecase.Update(r.Context(), id, taskusecase.UpdateInput{
-		Title:       req.Title,
-		Description: req.Description,
-		Status:      req.Status,
+		Title:         req.Title,
+		Description:   req.Description,
+		StartDateTime: req.StartDateTime,
+		Rec:           req.Rec,
+		Status:        req.Status,
 	})
 	if err != nil {
 		writeUsecaseError(w, err)
@@ -128,6 +154,21 @@ func getIDFromRequest(r *http.Request) (int64, error) {
 	}
 
 	return id, nil
+}
+
+func getDateFromRequest(r *http.Request) (time.Time, error) {
+	rawDate := mux.Vars(r)["date"]
+	var date time.Time
+	if rawDate == "" {
+		return date, errors.New("missing date")
+	}
+
+	date, err := time.Parse(time.DateOnly, rawDate)
+	if err != nil {
+		return date, fmt.Errorf("Parse:", err)
+	}
+
+	return date, nil
 }
 
 func decodeJSON(r *http.Request, dst any) error {
