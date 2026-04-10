@@ -264,15 +264,16 @@
             "type": "int",
             "example": 1
           },
-          "recurrtype":{
+          "recurr_type":{
             "type": "string",
+            "enum": ["every_n_day", "every_other_day", "monthly"],
             "example": "every_n_day"
           },
-          "dayamount":{
+          "day_amount":{
             "type": "int",
             "example": 1
           },
-          "startdate":{
+          "start_date":{
             "type": "string",
             "format": "date-time",
             "example": "2026-03-24T00:00:00Z"

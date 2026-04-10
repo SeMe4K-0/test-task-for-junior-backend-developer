@@ -18,9 +18,9 @@ type taskMutationPereodicDTO struct {
 	Status      taskdomain.Status `json:"status"`
 
 	Repetition int               `json:"repetition"`
-	RecurrType taskdomain.Recurr `json:"recurr type"`
-	DayAmount  int               `json:"day amount"`
-	StartDate  time.Time         `json:"start date"`
+	RecurrType taskdomain.Recurr `json:"recurr_type"`
+	DayAmount  int               `json:"day_amount"`
+	StartDate  time.Time         `json:"start_date"`
 }
 
 type taskDTO struct {

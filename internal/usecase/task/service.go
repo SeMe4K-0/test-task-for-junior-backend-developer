@@ -143,13 +143,13 @@ func (s *Service) CreatePereodic(ctx context.Context, input CreatePereodicInput)
 	if err != nil {
 		return nil, err
 	}
-	model.CreatedAt, err = NextPereodicOcurrence(input)
-	model.UpdatedAt, err = NextPereodicOcurrence(input)
+	model.CreatedAt, err = NextPereodicOcurrence(model.CreatedAt, input.DayAmount, input.RecurrType)
+	model.UpdatedAt, err = NextPereodicOcurrence(model.UpdatedAt, input.DayAmount, input.RecurrType)
 
 	for i := 1; i < input.Repetition; i++ {
 		created, err = s.repo.CreatePereodic(ctx, model)
-		model.CreatedAt, err = NextPereodicOcurrence(input)
-		model.UpdatedAt, err = NextPereodicOcurrence(input)
+		model.CreatedAt, err = NextPereodicOcurrence(model.CreatedAt, input.DayAmount, input.RecurrType)
+		model.UpdatedAt, err = NextPereodicOcurrence(model.UpdatedAt, input.DayAmount, input.RecurrType)
 	}
 
 	return created, nil
@@ -200,11 +200,11 @@ func validateCreatePereodicInput(input CreatePereodicInput) (CreatePereodicInput
 	return input, nil
 }
 
-func NextPereodicOcurrence(input CreatePereodicInput) (time.Time, error) {
-	DiffTime := input.StartDate
-	DayA := input.DayAmount
+func NextPereodicOcurrence(dates time.Time, damnt int, swcase taskdomain.Recurr) (time.Time, error) {
+	DiffTime := dates
+	DayA := damnt
 
-	switch input.RecurrType {
+	switch swcase {
 	case taskdomain.OnceNDay:
 		return DiffTime.AddDate(0, 0, DayA), nil
 	case taskdomain.OnceOtherDay:

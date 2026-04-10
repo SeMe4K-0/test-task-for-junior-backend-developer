@@ -23,7 +23,7 @@ type Recurr string
 
 const (
 	OnceNDay     Recurr = "every_n_day"
-	OnceOtherDay Recurr = "other_day"
+	OnceOtherDay Recurr = "every_other_day"
 	OnceAMonth   Recurr = "monthly"
 )
 
