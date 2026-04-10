@@ -57,13 +57,18 @@ var swaggerUIHTML = []byte(`<!doctype html>
   <script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-bundle.js" crossorigin></script>
   <script>
     window.onload = function() {
-      window.ui = SwaggerUIBundle({
-        url: '/swagger/openapi.json',
-        dom_id: '#swagger-ui',
-        deepLinking: true,
-        presets: [SwaggerUIBundle.presets.apis],
-        layout: 'BaseLayout'
-      });
+      try {
+        window.ui = SwaggerUIBundle({
+          url: '/swagger/openapi.json',
+          dom_id: '#swagger-ui',
+          deepLinking: true,
+          presets: [SwaggerUIBundle.presets.apis],
+          layout: 'BaseLayout'
+        });
+      } catch (error) {
+        console.error('Failed to load Swagger UI:', error);
+        document.getElementById('swagger-ui').innerHTML = '<p style="color: red;">Error loading Swagger UI: ' + error.message + '</p>';
+      }
     };
   </script>
 </body>
