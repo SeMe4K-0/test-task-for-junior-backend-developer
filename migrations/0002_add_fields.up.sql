@@ -1,0 +1,4 @@
+ALTER TABLE tasks
+    ADD COLUMN periodicity VARCHAR(9) NOT NULL DEFAULT 'once',
+    ADD COLUMN scheduled_at TIMESTAMPTZ ARRAY,
+    ADD COLUMN frequency INTEGER;

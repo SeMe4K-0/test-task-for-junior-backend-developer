@@ -30,7 +30,10 @@ func (s *Service) Create(ctx context.Context, input CreateInput) (*taskdomain.Ta
 	model := &taskdomain.Task{
 		Title:       normalized.Title,
 		Description: normalized.Description,
+		Periodicity: normalized.Periodicity,
+		ScheduledAt: normalized.ScheduledAt,
 		Status:      normalized.Status,
+		Frequency:   normalized.Frequency,
 	}
 	now := s.now()
 	model.CreatedAt = now
@@ -66,6 +69,9 @@ func (s *Service) Update(ctx context.Context, id int64, input UpdateInput) (*tas
 		ID:          id,
 		Title:       normalized.Title,
 		Description: normalized.Description,
+		Periodicity: normalized.Periodicity,
+		ScheduledAt: normalized.ScheduledAt,
+		Frequency:   normalized.Frequency,
 		Status:      normalized.Status,
 		UpdatedAt:   s.now(),
 	}
@@ -102,9 +108,20 @@ func validateCreateInput(input CreateInput) (CreateInput, error) {
 		input.Status = taskdomain.StatusNew
 	}
 
-	if !input.Status.Valid() {
-		return CreateInput{}, fmt.Errorf("%w: invalid status", ErrInvalidInput)
+	if input.Periodicity == "" {
+		input.Periodicity = taskdomain.PeriodicityOnce
 	}
+
+	if input.Periodicity != taskdomain.PeriodicitySetDates {
+		input.ScheduledAt = input.ScheduledAt[:1]
+	}
+
+	normalizedFreq, err := validateFrequency(input.Periodicity, input.Frequency)
+	if err != nil {
+		return CreateInput{}, err
+	}
+
+	input.Frequency = normalizedFreq
 
 	return input, nil
 }
@@ -121,5 +138,46 @@ func validateUpdateInput(input UpdateInput) (UpdateInput, error) {
 		return UpdateInput{}, fmt.Errorf("%w: invalid status", ErrInvalidInput)
 	}
 
+	if !input.Periodicity.Valid() {
+		return UpdateInput{}, fmt.Errorf("%w: invalid periodicity", ErrInvalidInput)
+	}
+
+	if input.Periodicity != taskdomain.PeriodicitySetDates {
+		input.ScheduledAt = input.ScheduledAt[:1]
+	}
+
+	normalizedFreq, err := validateFrequency(input.Periodicity, input.Frequency)
+	if err != nil {
+		return UpdateInput{}, err
+	}
+
+	input.Frequency = normalizedFreq
+
 	return input, nil
+}
+
+func validateFrequency(periodicity taskdomain.Periodicity, frequency int64) (int64, error) {
+	newFrequency := frequency
+	var err error = nil
+
+	switch periodicity {
+	case taskdomain.PeriodicityOnce, taskdomain.PeriodicitySetDates:
+		newFrequency = 0
+	case taskdomain.PeriodicityInterval:
+		break
+	case taskdomain.PeriodicityMonthly:
+		if frequency < 1 || frequency > 31 {
+			newFrequency = -1
+			err = fmt.Errorf("%w: invalid frequency value", ErrInvalidInput)
+		}
+	case taskdomain.PeriodicityParity:
+		if frequency < 0 || frequency > 1 {
+			newFrequency = -1
+			err = fmt.Errorf("%w: invalid frequency value", ErrInvalidInput)
+		}
+	default:
+		newFrequency = -1
+		err = fmt.Errorf("%w: invalid frequency value", ErrInvalidInput)
+	}
+	return newFrequency, err
 }
