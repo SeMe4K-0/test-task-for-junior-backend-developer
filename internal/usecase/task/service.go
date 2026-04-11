@@ -135,3 +135,49 @@ if input.Recurrence != nil {
 		return nil, fmt.Errorf("%w: %v", ErrInvalidInput, err)
 	}
 }
+
+func calculateNextRun(r *taskdomain.Recurrence, now time.Time) *time.Time {
+	switch r.Type {
+
+	case taskdomain.RecurrenceDaily:
+		next := now.AddDate(0, 0, *r.IntervalDays)
+		return &next
+
+	case taskdomain.RecurrenceEvenDays, taskdomain.RecurrenceOddDays:
+		for i := 1; i <= 31; i++ {
+			d := now.AddDate(0, 0, i)
+			day := d.Day()
+
+			if r.Type == taskdomain.RecurrenceEvenDays && day%2 == 0 {
+				return &d
+			}
+			if r.Type == taskdomain.RecurrenceOddDays && day%2 != 0 {
+				return &d
+			}
+		}
+
+	case taskdomain.RecurrenceMonthly:
+		for i := 1; i <= 365; i++ {
+			d := now.AddDate(0, 0, i)
+			for _, day := range r.DaysOfMonth {
+				if d.Day() == day {
+					return &d
+				}
+			}
+		}
+
+	case taskdomain.RecurrenceSpecificDates:
+		var closest *time.Time
+		for _, d := range r.Dates {
+			if d.After(now) {
+				if closest == nil || d.Before(*closest) {
+					tmp := d
+					closest = &tmp
+				}
+			}
+		}
+		return closest
+	}
+
+	return nil
+}
