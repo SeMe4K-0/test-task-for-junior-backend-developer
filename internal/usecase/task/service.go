@@ -31,8 +31,14 @@ func (s *Service) Create(ctx context.Context, input CreateInput) (*taskdomain.Ta
 		Title:       normalized.Title,
 		Description: normalized.Description,
 		Status:      normalized.Status,
+		Recurrence:  input.Recurrence,
 	}
 	now := s.now()
+
+	if input.Recurrence != nil {
+		next := calculateNextRun(input.Recurrence, now)
+		model.NextRunAt = next
+	}
 	model.CreatedAt = now
 	model.UpdatedAt = now
 
@@ -122,4 +128,10 @@ func validateUpdateInput(input UpdateInput) (UpdateInput, error) {
 	}
 
 	return input, nil
+}
+
+if input.Recurrence != nil {
+	if err := input.Recurrence.Validate(); err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrInvalidInput, err)
+	}
 }
