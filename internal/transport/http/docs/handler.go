@@ -40,6 +40,16 @@ func (h *Handler) RedirectToUI(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/swagger/", http.StatusMovedPermanently)
 }
 
+func (h *TaskHandler) Generate(w http.ResponseWriter, r *http.Request) {
+	err := h.usecase.Generate(r.Context())
+	if err != nil {
+		writeUsecaseError(w, err)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+}
+
 var swaggerUIHTML = []byte(`<!doctype html>
 <html lang="en">
 <head>

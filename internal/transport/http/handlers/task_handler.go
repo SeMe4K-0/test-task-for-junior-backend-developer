@@ -27,10 +27,21 @@ func (h *TaskHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var recurrence *taskdomain.Recurrence
+	if req.Recurrence != nil {
+		recurrence = &taskdomain.Recurrence{
+			Type:         taskdomain.RecurrenceType(req.Recurrence.Type),
+			IntervalDays: req.Recurrence.IntervalDays,
+			DaysOfMonth:  req.Recurrence.DaysOfMonth,
+			Dates:        req.Recurrence.Dates,
+		}
+	}
+
 	created, err := h.usecase.Create(r.Context(), taskusecase.CreateInput{
 		Title:       req.Title,
 		Description: req.Description,
 		Status:      req.Status,
+		Recurrence:  recurrence,
 	})
 	if err != nil {
 		writeUsecaseError(w, err)

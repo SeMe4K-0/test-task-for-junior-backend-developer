@@ -31,8 +31,14 @@ func (s *Service) Create(ctx context.Context, input CreateInput) (*taskdomain.Ta
 		Title:       normalized.Title,
 		Description: normalized.Description,
 		Status:      normalized.Status,
+		Recurrence:  input.Recurrence,
 	}
 	now := s.now()
+
+	if input.Recurrence != nil {
+		next := calculateNextRun(input.Recurrence, now)
+		model.NextRunAt = next
+	}
 	model.CreatedAt = now
 	model.UpdatedAt = now
 
@@ -122,4 +128,98 @@ func validateUpdateInput(input UpdateInput) (UpdateInput, error) {
 	}
 
 	return input, nil
+}
+
+if input.Recurrence != nil {
+	if err := input.Recurrence.Validate(); err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrInvalidInput, err)
+	}
+}
+
+func calculateNextRun(r *taskdomain.Recurrence, now time.Time) *time.Time {
+	switch r.Type {
+
+	case taskdomain.RecurrenceDaily:
+		next := now.AddDate(0, 0, *r.IntervalDays)
+		return &next
+
+	case taskdomain.RecurrenceEvenDays, taskdomain.RecurrenceOddDays:
+		for i := 1; i <= 31; i++ {
+			d := now.AddDate(0, 0, i)
+			day := d.Day()
+
+			if r.Type == taskdomain.RecurrenceEvenDays && day%2 == 0 {
+				return &d
+			}
+			if r.Type == taskdomain.RecurrenceOddDays && day%2 != 0 {
+				return &d
+			}
+		}
+
+	case taskdomain.RecurrenceMonthly:
+		for i := 1; i <= 365; i++ {
+			d := now.AddDate(0, 0, i)
+			for _, day := range r.DaysOfMonth {
+				if d.Day() == day {
+					return &d
+				}
+			}
+		}
+
+	case taskdomain.RecurrenceSpecificDates:
+		var closest *time.Time
+		for _, d := range r.Dates {
+			if d.After(now) {
+				if closest == nil || d.Before(*closest) {
+					tmp := d
+					closest = &tmp
+				}
+			}
+		}
+		return closest
+	}
+
+	return nil
+}
+
+func (s *Service) Generate(ctx context.Context) error {
+	tasks, err := s.repo.List(ctx)
+	if err != nil {
+		return err
+	}
+
+	now := s.now()
+
+	for _, t := range tasks {
+		if t.Recurrence == nil || t.NextRunAt == nil {
+			continue
+		}
+
+		if t.NextRunAt.After(now) {
+			continue
+		}
+
+		newTask := &taskdomain.Task{
+			Title:       t.Title,
+			Description: t.Description,
+			Status:      taskdomain.StatusNew,
+			CreatedAt:   now,
+			UpdatedAt:   now,
+		}
+
+		_, err := s.repo.Create(ctx, newTask)
+		if err != nil {
+			return err
+		}
+
+		next := calculateNextRun(t.Recurrence, now)
+		t.NextRunAt = next
+
+		_, err = s.repo.Update(ctx, &t)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }

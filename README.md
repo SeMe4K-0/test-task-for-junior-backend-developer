@@ -1,55 +1,126 @@
-# Task Service
+# Task Service (Test Assignment)
 
-Сервис для управления задачами с HTTP API на Go.
+## 📌 Описание
 
-## Требования
+Расширение существующего сервиса задач с поддержкой **периодических задач (recurring tasks)**.
 
-- Go `1.23+`
-- Docker и Docker Compose
+Теперь система позволяет автоматически создавать задачи по заданным правилам.
 
-## Быстрый запуск через Docker Compose
+---
+
+## ⚙️ Реализованные возможности
+
+* CRUD для задач (из исходного проекта)
+* Поддержка периодичности:
+
+  * ежедневные (каждый N дней)
+  * ежемесячные (по дням месяца)
+  * конкретные даты
+  * четные / нечетные дни
+* Автоматическая генерация задач
+
+---
+
+## 🧠 Архитектурное решение
+
+### Почему Recurrence хранится в Task
+
+Я выбрал хранение правил повторения в виде JSON (JSONB в PostgreSQL), потому что:
+
+* это упрощает схему БД
+* не требует дополнительных таблиц
+* гибко расширяется
+* достаточно для текущих требований
+
+---
+
+### Как работает генерация задач
+
+1. У задачи есть поле `next_run_at`
+2. При вызове `/tasks/generate`:
+
+   * выбираются задачи с `recurrence`
+   * если `next_run_at <= now` → создается новая задача
+   * пересчитывается следующий запуск
+
+---
+
+## 📦 API
+
+### Создание задачи с периодичностью
+
+```json
+POST /api/v1/tasks
+
+{
+  "title": "Call patients",
+  "recurrence": {
+    "type": "daily",
+    "interval_days": 1
+  }
+}
+```
+
+---
+
+### Генерация задач
+
+```
+POST /api/v1/tasks/generate
+```
+
+---
+
+## 🚀 Запуск
+
+### 1. Поднять PostgreSQL
 
 ```bash
-docker compose up --build
+docker run -p 5432:5432 -e POSTGRES_PASSWORD=postgres postgres
 ```
 
-После запуска сервис будет доступен по адресу `http://localhost:8080`.
+### 2. Применить миграцию
 
-Если `postgres` уже запускался ранее со старой схемой, пересоздай volume:
+```sql
+ALTER TABLE tasks
+ADD COLUMN recurrence JSONB,
+ADD COLUMN next_run_at TIMESTAMP;
+```
+
+### 3. Запуск сервера
 
 ```bash
-docker compose down -v
-docker compose up --build
+go run ./cmd/api
 ```
 
-Причина в том, что SQL-файл из `migrations/0001_create_tasks.up.sql` монтируется в `docker-entrypoint-initdb.d` и применяется только при инициализации пустого data volume.
+---
 
-## Swagger
+## 🧪 Тестирование
 
-Swagger UI:
+1. Создать задачу с recurrence
+2. Проверить `/tasks`
+3. Вызвать `/tasks/generate`
+4. Проверить появление новых задач
 
-```text
-http://localhost:8080/swagger/
-```
+---
 
-OpenAPI JSON:
+## ⚠️ Edge cases
 
-```text
-http://localhost:8080/swagger/openapi.json
-```
+* interval_days <= 0 → ошибка
+* пустой title → ошибка
+* monthly:
 
-## API
+  * если день отсутствует в месяце → пропускается
+* specific_dates:
 
-Базовый префикс API:
+  * даты в прошлом игнорируются
+* timezone: используется UTC
 
-```text
-/api/v1
-```
+---
 
-Основные маршруты:
+## 🔧 Возможные улучшения
 
-- `POST /api/v1/tasks`
-- `GET /api/v1/tasks`
-- `GET /api/v1/tasks/{id}`
-- `PUT /api/v1/tasks/{id}`
-- `DELETE /api/v1/tasks/{id}`
+* вынести recurrence в отдельную таблицу (task templates)
+* добавить cron/worker вместо ручного endpoint
+* защита от дубликатов задач
+* unit-тесты

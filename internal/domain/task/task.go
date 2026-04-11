@@ -17,6 +17,8 @@ type Task struct {
 	Status      Status    `json:"status"`
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
+	Recurrence *Recurrence `json:"recurrence,omitempty"`
+	NextRunAt  *time.Time  `json:"next_run_at,omitempty"`
 }
 
 func (s Status) Valid() bool {

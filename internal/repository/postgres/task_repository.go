@@ -20,12 +20,17 @@ func New(pool *pgxpool.Pool) *Repository {
 
 func (r *Repository) Create(ctx context.Context, task *taskdomain.Task) (*taskdomain.Task, error) {
 	const query = `
-		INSERT INTO tasks (title, description, status, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5)
+		INSERT INTO tasks (title, description, status, created_at, updated_at, recurrence, next_run_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
 		RETURNING id, title, description, status, created_at, updated_at
 	`
 
-	row := r.pool.QueryRow(ctx, query, task.Title, task.Description, task.Status, task.CreatedAt, task.UpdatedAt)
+	var recurrenceJSON []byte
+	if task.Recurrence != nil {
+		recurrenceJSON, _ = json.Marshal(task.Recurrence)
+	}
+
+	row := r.pool.QueryRow(ctx, query, task.Title, task.Description, task.Status, task.CreatedAt, task.UpdatedAt, recurrenceJSON, task.NextRunAt)
 	created, err := scanTask(row)
 	if err != nil {
 		return nil, err
@@ -131,6 +136,8 @@ func scanTask(scanner taskScanner) (*taskdomain.Task, error) {
 	var (
 		task   taskdomain.Task
 		status string
+		var recurrenceBytes []byte
+		var nextRunAt *time.Time
 	)
 
 	if err := scanner.Scan(
@@ -140,9 +147,19 @@ func scanTask(scanner taskScanner) (*taskdomain.Task, error) {
 		&status,
 		&task.CreatedAt,
 		&task.UpdatedAt,
+		&recurrenceBytes,
+		&nextRunAt,
 	); err != nil {
 		return nil, err
 	}
+
+	if len(recurrenceBytes) > 0 {
+		var r taskdomain.Recurrence
+		_ = json.Unmarshal(recurrenceBytes, &r)
+		task.Recurrence = &r
+	}
+
+	task.NextRunAt = nextRunAt
 
 	task.Status = taskdomain.Status(status)
 
