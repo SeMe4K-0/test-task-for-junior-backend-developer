@@ -181,3 +181,45 @@ func calculateNextRun(r *taskdomain.Recurrence, now time.Time) *time.Time {
 
 	return nil
 }
+
+func (s *Service) Generate(ctx context.Context) error {
+	tasks, err := s.repo.List(ctx)
+	if err != nil {
+		return err
+	}
+
+	now := s.now()
+
+	for _, t := range tasks {
+		if t.Recurrence == nil || t.NextRunAt == nil {
+			continue
+		}
+
+		if t.NextRunAt.After(now) {
+			continue
+		}
+
+		newTask := &taskdomain.Task{
+			Title:       t.Title,
+			Description: t.Description,
+			Status:      taskdomain.StatusNew,
+			CreatedAt:   now,
+			UpdatedAt:   now,
+		}
+
+		_, err := s.repo.Create(ctx, newTask)
+		if err != nil {
+			return err
+		}
+
+		next := calculateNextRun(t.Recurrence, now)
+		t.NextRunAt = next
+
+		_, err = s.repo.Update(ctx, &t)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
