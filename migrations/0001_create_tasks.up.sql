@@ -7,4 +7,8 @@ CREATE TABLE IF NOT EXISTS tasks (
 	updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+ALTER TABLE tasks
+ADD COLUMN recurrence JSONB,
+ADD COLUMN next_run_at TIMESTAMP;
+
 CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks (status);
