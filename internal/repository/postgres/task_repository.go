@@ -20,12 +20,54 @@ func New(pool *pgxpool.Pool) *Repository {
 
 func (r *Repository) Create(ctx context.Context, task *taskdomain.Task) (*taskdomain.Task, error) {
 	const query = `
-		INSERT INTO tasks (title, description, status, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5)
-		RETURNING id, title, description, status, created_at, updated_at
+	INSERT INTO tasks (
+    title,
+    description,
+    status,
+    created_at,
+    updated_at,
+    recurrence_type,
+    recurrence_interval_days,
+    recurrence_day_of_month,
+    recurrence_parity_even,
+    recurrence_end_date
+	)
+	VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+	RETURNING id, title, description, status, created_at, updated_at,
+						recurrence_type, recurrence_interval_days,
+						recurrence_day_of_month, recurrence_parity_even,
+						recurrence_end_date
 	`
 
-	row := r.pool.QueryRow(ctx, query, task.Title, task.Description, task.Status, task.CreatedAt, task.UpdatedAt)
+	var (
+		recType interface{}
+		recInterval interface{}
+		recDay interface{}
+		recParity interface{}
+		recEnd interface{}
+	)
+
+	if task.Recurrence != nil {
+		recType = task.Recurrence.Type
+		recInterval = task.Recurrence.IntervalDays
+		recDay = task.Recurrence.DayOfMonth
+		recParity = task.Recurrence.ParityEven
+		recEnd = task.Recurrence.EndDate
+	}
+
+	row := r.pool.QueryRow(ctx, query,
+		task.Title,
+		task.Description,
+		task.Status,
+		task.CreatedAt,
+		task.UpdatedAt,
+		recType,
+		recInterval,
+		recDay,
+		recParity,
+		recEnd,
+	)
+
 	created, err := scanTask(row)
 	if err != nil {
 		return nil, err
