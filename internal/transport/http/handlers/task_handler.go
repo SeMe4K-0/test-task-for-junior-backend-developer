@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/gorilla/mux"
 
@@ -97,6 +98,33 @@ func (h *TaskHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *TaskHandler) GetByDate(w http.ResponseWriter, r *http.Request) {
+	dateStr := r.URL.Query().Get("date")
+	if dateStr == "" {
+		writeError(w, http.StatusBadRequest, errors.New("date is required"))
+		return
+	}
+
+	date, err := time.Parse("2006-01-02", dateStr)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, errors.New("invalid date format"))
+		return
+	}
+
+	tasks, err := h.usecase.GetByDate(r.Context(), date)
+	if err != nil {
+		writeUsecaseError(w, err)
+		return
+	}
+
+	resp := make([]taskDTO, 0, len(tasks))
+	for i := range tasks {
+		resp = append(resp, newTaskDTO(&tasks[i]))
+	}
+
+	writeJSON(w, http.StatusOK, resp)
 }
 
 func (h *TaskHandler) List(w http.ResponseWriter, r *http.Request) {
