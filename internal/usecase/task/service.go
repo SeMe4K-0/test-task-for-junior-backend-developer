@@ -27,10 +27,17 @@ func (s *Service) Create(ctx context.Context, input CreateInput) (*taskdomain.Ta
 		return nil, err
 	}
 
+	if input.Recurrence != nil {
+		if err := input.Recurrence.Validate(); err != nil {
+			return nil, fmt.Errorf("%w: %v", ErrInvalidInput, err)
+		}
+	}
+
 	model := &taskdomain.Task{
 		Title:       normalized.Title,
 		Description: normalized.Description,
 		Status:      normalized.Status,
+		Recurrence:  input.Recurrence,
 	}
 	now := s.now()
 	model.CreatedAt = now
@@ -62,11 +69,18 @@ func (s *Service) Update(ctx context.Context, id int64, input UpdateInput) (*tas
 		return nil, err
 	}
 
+	if input.Recurrence != nil {
+		if err := input.Recurrence.Validate(); err != nil {
+			return nil, fmt.Errorf("%w: %v", ErrInvalidInput, err)
+		}
+	}
+
 	model := &taskdomain.Task{
 		ID:          id,
 		Title:       normalized.Title,
 		Description: normalized.Description,
 		Status:      normalized.Status,
+		Recurrence:  input.Recurrence,
 		UpdatedAt:   s.now(),
 	}
 
