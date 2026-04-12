@@ -34,44 +34,37 @@ func (r RecurrenceType) IsValid() bool {
 }
 
 func (r Recurrence) Validate() error {
-	if !r.Type.IsValid() {
-		return fmt.Errorf("invalid recurrence type")
-	}
-
-	if r.Type == None {
-		return nil
-	}
-
 	switch r.Type {
+
+	case None:
+		return nil
 
 	case Daily:
 		if r.IntervalDays <= 0 {
 			return fmt.Errorf("interval_days must be > 0")
 		}
-		if r.DayOfMonth != 0 || len(r.SpecificDates) > 0 {
-			return fmt.Errorf("invalid fields for daily recurrence")
-		}
 
 	case Monthly:
 		if r.DayOfMonth < 1 || r.DayOfMonth > 31 {
-			return fmt.Errorf("day_of_month must be 1-31")
-		}
-		if r.IntervalDays != 0 || len(r.SpecificDates) > 0 {
-			return fmt.Errorf("invalid fields for monthly recurrence")
-		}
-
-	case Parity:
-		if r.IntervalDays != 0 || r.DayOfMonth != 0 || len(r.SpecificDates) > 0 {
-			return fmt.Errorf("invalid fields for parity recurrence")
+			return fmt.Errorf("day_of_month must be in range 1-31")
 		}
 
 	case Specific:
 		if len(r.SpecificDates) == 0 {
-			return fmt.Errorf("specific_dates required")
+			return fmt.Errorf("specific_dates is required")
 		}
-		if r.IntervalDays != 0 || r.DayOfMonth != 0 {
-			return fmt.Errorf("invalid fields for specific recurrence")
+
+		for _, d := range r.SpecificDates {
+			if d.IsZero() {
+				return fmt.Errorf("specific_dates contains invalid date")
+			}
 		}
+
+	case Parity:
+		return nil
+
+	default:
+		return fmt.Errorf("unknown recurrence type")
 	}
 
 	return nil
