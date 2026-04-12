@@ -38,6 +38,8 @@ func main() {
 	taskRepo := postgresrepo.New(pool)
 	taskUsecase := task.NewService(taskRepo)
 	taskHandler := httphandlers.NewTaskHandler(taskUsecase)
+
+	go runScheduler(ctx, taskUsecase, logger)
 	docsHandler := swaggerdocs.NewHandler()
 	router := transporthttp.NewRouter(taskHandler, docsHandler)
 
@@ -82,6 +84,28 @@ func loadConfig() config {
 	}
 
 	return cfg
+}
+
+func runScheduler(ctx context.Context, usecase task.Usecase, log *slog.Logger) {
+	const interval = time.Hour
+
+	if err := usecase.RefillTemplates(ctx); err != nil {
+		log.Error("scheduler: refill templates", "error", err)
+	}
+
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			if err := usecase.RefillTemplates(ctx); err != nil {
+				log.Error("scheduler: refill templates", "error", err)
+			}
+		}
+	}
 }
 
 func envOrDefault(key, fallback string) string {
