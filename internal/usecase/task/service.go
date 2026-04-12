@@ -104,6 +104,25 @@ func (s *Service) List(ctx context.Context) ([]taskdomain.Task, error) {
 	return s.repo.List(ctx)
 }
 
+func (s *Service) GetByDate(ctx context.Context, date time.Time) ([]taskdomain.Task, error) {
+	tasks, err := s.repo.List(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	date = date.Truncate(24 * time.Hour)
+
+	result := make([]taskdomain.Task, 0)
+
+	for _, t := range tasks {
+		if t.IsActiveOn(date) {
+			result = append(result, t)
+		}
+	}
+
+	return result, nil
+}
+
 func validateCreateInput(input CreateInput) (CreateInput, error) {
 	input.Title = strings.TrimSpace(input.Title)
 	input.Description = strings.TrimSpace(input.Description)
