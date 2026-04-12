@@ -27,10 +27,22 @@ func (h *TaskHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	specificDates, err := parseDates(req.RecurrenceSpecificDates)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+
 	created, err := h.usecase.Create(r.Context(), taskusecase.CreateInput{
-		Title:       req.Title,
-		Description: req.Description,
-		Status:      req.Status,
+		Title:                   req.Title,
+		Description:             req.Description,
+		Status:                  req.Status,
+		ScheduledAt:             req.ScheduledAt,
+		RecurrenceType:          req.RecurrenceType,
+		RecurrenceDailyInterval: req.RecurrenceDailyInterval,
+		RecurrenceMonthlyDays:   req.RecurrenceMonthlyDays,
+		RecurrenceSpecificDates: specificDates,
+		RecurrenceDayParity: req.RecurrenceDayParity,
 	})
 	if err != nil {
 		writeUsecaseError(w, err)
@@ -69,10 +81,22 @@ func (h *TaskHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	specificDates, err := parseDates(req.RecurrenceSpecificDates)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+
 	updated, err := h.usecase.Update(r.Context(), id, taskusecase.UpdateInput{
-		Title:       req.Title,
-		Description: req.Description,
-		Status:      req.Status,
+		Title:                   req.Title,
+		Description:             req.Description,
+		Status:                  req.Status,
+		ScheduledAt:             req.ScheduledAt,
+		RecurrenceType:          req.RecurrenceType,
+		RecurrenceDailyInterval: req.RecurrenceDailyInterval,
+		RecurrenceMonthlyDays:   req.RecurrenceMonthlyDays,
+		RecurrenceSpecificDates: specificDates,
+		RecurrenceDayParity: req.RecurrenceDayParity,
 	})
 	if err != nil {
 		writeUsecaseError(w, err)
@@ -97,8 +121,12 @@ func (h *TaskHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// List возвращает задачи. По умолчанию шаблоны скрыты.
+// Передайте ?include=templates, чтобы включить их в ответ.
 func (h *TaskHandler) List(w http.ResponseWriter, r *http.Request) {
-	tasks, err := h.usecase.List(r.Context())
+	includeTemplates := r.URL.Query().Get("include") == "templates"
+
+	tasks, err := h.usecase.List(r.Context(), includeTemplates)
 	if err != nil {
 		writeUsecaseError(w, err)
 		return

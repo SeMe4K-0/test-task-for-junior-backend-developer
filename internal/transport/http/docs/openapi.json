@@ -3,7 +3,7 @@
   "info": {
     "title": "Task Service API",
     "version": "1.0.0",
-    "description": "CRUD API for tasks built with clean architecture."
+    "description": "CRUD API for tasks built with clean architecture. Supports recurring task templates.\n\n**Note:** recurrence fields are flat (`recurrence_type`, `recurrence_daily_interval`, etc.) — the nested `recurrence: {type, params}` format was removed in this version."
   },
   "servers": [
     {
@@ -13,7 +13,7 @@
   "tags": [
     {
       "name": "Tasks",
-      "description": "Operations with tasks"
+      "description": "Operations with tasks and recurring templates"
     }
   ],
   "paths": {
@@ -21,6 +21,19 @@
       "get": {
         "tags": ["Tasks"],
         "summary": "List tasks",
+        "description": "Returns instances and standalone tasks. Add `?include=templates` to also include template tasks.",
+        "parameters": [
+          {
+            "name": "include",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": ["templates"]
+            },
+            "description": "Pass `templates` to include template tasks in the response."
+          }
+        ],
         "responses": {
           "200": {
             "description": "Task list",
@@ -38,11 +51,54 @@
       "post": {
         "tags": ["Tasks"],
         "summary": "Create task",
+        "description": "Create a standalone task or a recurring template (when `recurrence_type` is provided). Creating a template immediately materialises instances for the next 60 days.",
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/CreateTaskRequest" }
+              "schema": { "$ref": "#/components/schemas/CreateTaskRequest" },
+              "examples": {
+                "standalone": {
+                  "summary": "One-off task",
+                  "value": {
+                    "title": "Prepare release",
+                    "description": "Collect release notes",
+                    "status": "new"
+                  }
+                },
+                "daily_template": {
+                  "summary": "Daily recurring template",
+                  "value": {
+                    "title": "Patient call-round",
+                    "recurrence_type": "daily",
+                    "recurrence_daily_interval": 1
+                  }
+                },
+                "monthly_template": {
+                  "summary": "Monthly on specific days",
+                  "value": {
+                    "title": "Monthly report",
+                    "recurrence_type": "monthly_days",
+                    "recurrence_monthly_days": [1, 15]
+                  }
+                },
+                "specific_dates_template": {
+                  "summary": "Specific dates",
+                  "value": {
+                    "title": "Quarterly review",
+                    "recurrence_type": "specific_dates",
+                    "recurrence_specific_dates": ["2026-06-01", "2026-09-01", "2026-12-01"]
+                  }
+                },
+                "weekday_parity_template": {
+                  "summary": "Even or odd calendar days",
+                  "value": {
+                    "title": "Every even day",
+                    "recurrence_type": "weekday_parity",
+                    "recurrence_weekday_parity": "even"
+                  }
+                }
+              }
             }
           }
         },
@@ -63,6 +119,7 @@
       "get": {
         "tags": ["Tasks"],
         "summary": "Get task by ID",
+        "description": "Returns any task role: template, instance, or standalone.",
         "parameters": [
           {
             "name": "id",
@@ -86,6 +143,7 @@
       "put": {
         "tags": ["Tasks"],
         "summary": "Update task",
+        "description": "Updating a template with a new `recurrence_type` rule deletes future unstarted instances and re-materialises them. Updating an instance only affects that instance. Omitting `recurrence_type` removes the recurrence rule (PUT semantics).",
         "parameters": [
           {
             "name": "id",
@@ -118,6 +176,7 @@
       "delete": {
         "tags": ["Tasks"],
         "summary": "Delete task",
+        "description": "Deleting a template cascades and removes all its instances.",
         "parameters": [
           {
             "name": "id",
@@ -153,67 +212,118 @@
       }
     },
     "schemas": {
+      "RecurrenceFields": {
+        "description": "Flat recurrence fields. Exactly one `recurrence_*` param field must be set when `recurrence_type` is present; all others must be absent.",
+        "properties": {
+          "recurrence_type": {
+            "type": "string",
+            "enum": ["daily", "monthly_days", "specific_dates", "weekday_parity"],
+            "nullable": true,
+            "example": "daily",
+            "description": "Recurrence discriminator. Non-null only for template tasks."
+          },
+          "recurrence_daily_interval": {
+            "type": "integer",
+            "minimum": 1,
+            "nullable": true,
+            "example": 2,
+            "description": "Required when `recurrence_type` = `daily`. Fire every N days (anchored to 2000-01-01 UTC)."
+          },
+          "recurrence_monthly_days": {
+            "type": "array",
+            "items": { "type": "integer", "minimum": 1, "maximum": 30 },
+            "nullable": true,
+            "example": [1, 15],
+            "description": "Required when `recurrence_type` = `monthly_days`. Calendar days of the month (1–30); days that don't exist in a month are skipped."
+          },
+          "recurrence_specific_dates": {
+            "type": "array",
+            "items": { "type": "string", "format": "date" },
+            "nullable": true,
+            "example": ["2026-06-01", "2026-09-15"],
+            "description": "Required when `recurrence_type` = `specific_dates`. Exact dates in YYYY-MM-DD (UTC)."
+          },
+          "recurrence_weekday_parity": {
+            "type": "string",
+            "enum": ["even", "odd"],
+            "nullable": true,
+            "example": "even",
+            "description": "Required when `recurrence_type` = `weekday_parity`. Fire on even or odd calendar days; day 31 is always skipped."
+          }
+        }
+      },
       "CreateTaskRequest": {
         "type": "object",
         "required": ["title"],
+        "allOf": [
+          { "$ref": "#/components/schemas/RecurrenceFields" }
+        ],
         "properties": {
-          "title": {
-            "type": "string",
-            "example": "Prepare release"
-          },
-          "description": {
-            "type": "string",
-            "example": "Collect release notes and check migrations"
-          },
+          "title": { "type": "string", "example": "Prepare release" },
+          "description": { "type": "string", "example": "Collect release notes and check migrations" },
           "status": {
             "type": "string",
             "enum": ["new", "in_progress", "done"],
             "example": "new"
+          },
+          "scheduled_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "example": "2026-05-01T00:00:00Z"
           }
         }
       },
       "UpdateTaskRequest": {
         "type": "object",
         "required": ["title", "status"],
+        "allOf": [
+          { "$ref": "#/components/schemas/RecurrenceFields" }
+        ],
         "properties": {
-          "title": {
-            "type": "string",
-            "example": "Prepare release"
-          },
-          "description": {
-            "type": "string",
-            "example": "Collect release notes and check migrations"
-          },
+          "title": { "type": "string", "example": "Prepare release" },
+          "description": { "type": "string", "example": "Collect release notes and check migrations" },
           "status": {
             "type": "string",
             "enum": ["new", "in_progress", "done"],
             "example": "in_progress"
+          },
+          "scheduled_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "example": "2026-05-01T00:00:00Z"
           }
         }
       },
       "Task": {
         "type": "object",
+        "allOf": [
+          { "$ref": "#/components/schemas/RecurrenceFields" }
+        ],
         "properties": {
           "id": { "type": "integer", "format": "int64", "example": 1 },
           "title": { "type": "string", "example": "Prepare release" },
-          "description": {
-            "type": "string",
-            "example": "Collect release notes and check migrations"
-          },
+          "description": { "type": "string", "example": "Collect release notes and check migrations" },
           "status": {
             "type": "string",
             "enum": ["new", "in_progress", "done"],
             "example": "new"
           },
-          "created_at": {
+          "created_at": { "type": "string", "format": "date-time", "example": "2026-03-24T00:00:00Z" },
+          "updated_at": { "type": "string", "format": "date-time", "example": "2026-03-24T00:00:00Z" },
+          "scheduled_at": {
             "type": "string",
             "format": "date-time",
-            "example": "2026-03-24T00:00:00Z"
+            "nullable": true,
+            "example": "2026-05-01T00:00:00Z"
           },
-          "updated_at": {
-            "type": "string",
-            "format": "date-time",
-            "example": "2026-03-24T00:00:00Z"
+          "parent_task_id": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true,
+            "example": 42,
+            "description": "Non-null for instance tasks; identifies the template."
           }
         }
       },
