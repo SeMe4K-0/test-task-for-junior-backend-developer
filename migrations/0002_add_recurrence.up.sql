@@ -8,14 +8,14 @@ ALTER TABLE tasks
     ADD COLUMN recurrence_daily_interval INT,
     ADD COLUMN recurrence_monthly_days   INT[],
     ADD COLUMN recurrence_specific_dates DATE[],
-    ADD COLUMN recurrence_weekday_parity TEXT;
+    ADD COLUMN recurrence_day_parity TEXT;
 
 -- recurrence_type: одно из 4 допустимых значений или NULL.
 ALTER TABLE tasks
     ADD CONSTRAINT chk_recurrence_type_values
         CHECK (
             recurrence_type IS NULL
-            OR recurrence_type IN ('daily', 'monthly_days', 'specific_dates', 'weekday_parity')
+            OR recurrence_type IN ('daily', 'monthly_days', 'specific_dates', 'day_parity')
         );
 
 -- Если recurrence_type IS NULL — все параметры тоже NULL.
@@ -27,7 +27,7 @@ ALTER TABLE tasks
                 recurrence_daily_interval IS NULL
                 AND recurrence_monthly_days IS NULL
                 AND recurrence_specific_dates IS NULL
-                AND recurrence_weekday_parity IS NULL
+                AND recurrence_day_parity IS NULL
             )
         );
 
@@ -40,7 +40,7 @@ ALTER TABLE tasks
                 recurrence_daily_interval IS NOT NULL
                 AND recurrence_monthly_days IS NULL
                 AND recurrence_specific_dates IS NULL
-                AND recurrence_weekday_parity IS NULL
+                AND recurrence_day_parity IS NULL
             )
         ),
     ADD CONSTRAINT chk_recurrence_monthly_days
@@ -50,7 +50,7 @@ ALTER TABLE tasks
                 recurrence_monthly_days IS NOT NULL
                 AND recurrence_daily_interval IS NULL
                 AND recurrence_specific_dates IS NULL
-                AND recurrence_weekday_parity IS NULL
+                AND recurrence_day_parity IS NULL
             )
         ),
     ADD CONSTRAINT chk_recurrence_specific_dates
@@ -60,14 +60,14 @@ ALTER TABLE tasks
                 recurrence_specific_dates IS NOT NULL
                 AND recurrence_daily_interval IS NULL
                 AND recurrence_monthly_days IS NULL
-                AND recurrence_weekday_parity IS NULL
+                AND recurrence_day_parity IS NULL
             )
         ),
-    ADD CONSTRAINT chk_recurrence_weekday_parity
+    ADD CONSTRAINT chk_recurrence_day_parity
         CHECK (
-            recurrence_type != 'weekday_parity'
+            recurrence_type != 'day_parity'
             OR (
-                recurrence_weekday_parity IS NOT NULL
+                recurrence_day_parity IS NOT NULL
                 AND recurrence_daily_interval IS NULL
                 AND recurrence_monthly_days IS NULL
                 AND recurrence_specific_dates IS NULL
