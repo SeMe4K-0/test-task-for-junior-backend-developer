@@ -31,6 +31,7 @@ func (h *TaskHandler) Create(w http.ResponseWriter, r *http.Request) {
 		Title:       req.Title,
 		Description: req.Description,
 		Status:      req.Status,
+		Repeated:    toDomainRepeated(req.Repeated),
 	})
 	if err != nil {
 		writeUsecaseError(w, err)
@@ -73,6 +74,7 @@ func (h *TaskHandler) Update(w http.ResponseWriter, r *http.Request) {
 		Title:       req.Title,
 		Description: req.Description,
 		Status:      req.Status,
+		Repeated:    toDomainRepeated(req.Repeated),
 	})
 	if err != nil {
 		writeUsecaseError(w, err)
@@ -110,6 +112,15 @@ func (h *TaskHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, response)
+}
+
+func toDomainRepeated(dto repeatedDTO) taskdomain.Repeated {
+	return taskdomain.Repeated{
+		Type:          dto.Type,
+		EveryNDays:    dto.EveryNDays,
+		DayOfMonth:    dto.DayOfMonth,
+		SpecificDates: dto.SpecificDates,
+	}
 }
 
 func getIDFromRequest(r *http.Request) (int64, error) {

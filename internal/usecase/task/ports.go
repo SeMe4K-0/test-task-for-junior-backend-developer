@@ -26,10 +26,12 @@ type CreateInput struct {
 	Title       string
 	Description string
 	Status      taskdomain.Status
+	Repeated    taskdomain.Repeated
 }
 
 type UpdateInput struct {
 	Title       string
 	Description string
 	Status      taskdomain.Status
+	Repeated    taskdomain.Repeated
 }
