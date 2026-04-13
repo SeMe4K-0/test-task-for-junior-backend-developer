@@ -83,7 +83,7 @@ docker compose down -v
 docker compose up --build
 ```
 
-Миграции из `migrations/0001_create_tasks.up.sql`, `migrations/0002_add_recurrence.up.sql` и `migrations/0004_add_start_date.up.sql` применяются при инициализации пустого volume через `docker-entrypoint-initdb.d`.
+Миграции из `migrations/0001_create_tasks.up.sql`, `migrations/0002_add_recurrence.up.sql` и `migrations/0003_add_start_date.up.sql` применяются при инициализации пустого volume через `docker-entrypoint-initdb.d`
 
 ## Swagger
 
