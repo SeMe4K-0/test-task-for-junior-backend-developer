@@ -38,6 +38,7 @@ func (s *Service) Create(ctx context.Context, input CreateInput) (*taskdomain.Ta
 		Description: normalized.Description,
 		Status:      normalized.Status,
 		Recurrence:  input.Recurrence,
+		StartDate:   normalized.StartDate,
 	}
 	now := s.now()
 	model.CreatedAt = now
@@ -81,6 +82,7 @@ func (s *Service) Update(ctx context.Context, id int64, input UpdateInput) (*tas
 		Description: normalized.Description,
 		Status:      normalized.Status,
 		Recurrence:  input.Recurrence,
+		StartDate:   normalized.StartDate,
 		UpdatedAt:   s.now(),
 	}
 
@@ -139,6 +141,10 @@ func validateCreateInput(input CreateInput) (CreateInput, error) {
 		return CreateInput{}, fmt.Errorf("%w: invalid status", ErrInvalidInput)
 	}
 
+	if input.StartDate.IsZero() {
+		return CreateInput{}, fmt.Errorf("%w: start_date is required", ErrInvalidInput)
+	}
+
 	return input, nil
 }
 
@@ -152,6 +158,10 @@ func validateUpdateInput(input UpdateInput) (UpdateInput, error) {
 
 	if !input.Status.Valid() {
 		return UpdateInput{}, fmt.Errorf("%w: invalid status", ErrInvalidInput)
+	}
+
+	if input.StartDate.IsZero() {
+		return UpdateInput{}, fmt.Errorf("%w: start_date is required", ErrInvalidInput)
 	}
 
 	return input, nil

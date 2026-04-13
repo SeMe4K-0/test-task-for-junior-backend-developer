@@ -24,13 +24,15 @@ func (r *Repository) Create(ctx context.Context, t *taskdomain.Task) (*taskdomai
 		title,
 		description,
 		status,
+		start_date,
 		created_at,
 		updated_at,
 		recurrence
 	)
-	VALUES ($1,$2,$3,$4,$5,$6)
+	VALUES ($1,$2,$3,$4,$5,$6,$7)
 	RETURNING
 		id, title, description, status,
+		start_date,
 		created_at, updated_at,
 		recurrence
 	`
@@ -44,6 +46,7 @@ func (r *Repository) Create(ctx context.Context, t *taskdomain.Task) (*taskdomai
 		t.Title,
 		t.Description,
 		t.Status,
+		t.StartDate,
 		t.CreatedAt,
 		t.UpdatedAt,
 		recJSON,
@@ -56,6 +59,7 @@ func (r *Repository) GetByID(ctx context.Context, id int64) (*taskdomain.Task, e
 	const query = `
 	SELECT
 		id, title, description, status,
+		start_date,
 		created_at, updated_at,
 		recurrence
 	FROM tasks
@@ -81,11 +85,13 @@ func (r *Repository) Update(ctx context.Context, t *taskdomain.Task) (*taskdomai
 		title = $1,
 		description = $2,
 		status = $3,
-		updated_at = $4,
-		recurrence = $5
-	WHERE id = $6
+		start_date = $4,
+		updated_at = $5,
+		recurrence = $6
+	WHERE id = $7
 	RETURNING
 		id, title, description, status,
+		start_date,
 		created_at, updated_at,
 		recurrence
 	`
@@ -99,6 +105,7 @@ func (r *Repository) Update(ctx context.Context, t *taskdomain.Task) (*taskdomai
 		t.Title,
 		t.Description,
 		t.Status,
+		t.StartDate,
 		t.UpdatedAt,
 		recJSON,
 		t.ID,
@@ -126,6 +133,7 @@ func (r *Repository) List(ctx context.Context) ([]taskdomain.Task, error) {
 	const query = `
 	SELECT
 		id, title, description, status,
+		start_date,
 		created_at, updated_at,
 		recurrence
 	FROM tasks
@@ -167,6 +175,7 @@ func scanTask(scanner scanner) (*taskdomain.Task, error) {
 		&task.Title,
 		&task.Description,
 		&status,
+		&task.StartDate,
 		&task.CreatedAt,
 		&task.UpdatedAt,
 		&recRaw,
@@ -182,7 +191,9 @@ func scanTask(scanner scanner) (*taskdomain.Task, error) {
 		return nil, err
 	}
 
-	task.Recurrence = &rec
+	if rec.Type != "" {
+		task.Recurrence = &rec
+	}
 
 	return &task, nil
 }

@@ -6,6 +6,10 @@ import (
 )
 
 func encodeRecurrence(r *taskdomain.Recurrence) ([]byte, error) {
+	if r == nil {
+		return nil, nil
+	}
+
 	if r.Type == "" {
 		return nil, nil
 	}

@@ -45,8 +45,8 @@ func (r Recurrence) Validate() error {
 		}
 
 	case Monthly:
-		if r.DayOfMonth < 1 || r.DayOfMonth > 31 {
-			return fmt.Errorf("day_of_month must be in range 1-31")
+		if r.DayOfMonth < 1 || r.DayOfMonth > 30 {
+			return fmt.Errorf("day_of_month must be in range 1-30")
 		}
 
 	case Specific:

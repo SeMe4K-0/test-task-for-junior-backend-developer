@@ -11,14 +11,14 @@ const (
 )
 
 type Task struct {
-	ID          int64     `json:"id"`
-	Title       string    `json:"title"`
-	Description string    `json:"description"`
-	Status      Status    `json:"status"`
-	CreatedAt   time.Time `json:"created_at"`
-	UpdatedAt   time.Time `json:"updated_at"`
-	Recurrence *Recurrence `json:"recurrence,omitempty"`
-	StartDateTime time.Time  `json:"start_date,omitempty"`
+	ID          int64       `json:"id"`
+	Title       string      `json:"title"`
+	Description string      `json:"description"`
+	Status      Status      `json:"status"`
+	CreatedAt   time.Time   `json:"created_at"`
+	UpdatedAt   time.Time   `json:"updated_at"`
+	Recurrence  *Recurrence `json:"recurrence,omitempty"`
+	StartDate   time.Time   `json:"start_date,omitempty"`
 }
 
 func (s Status) Valid() bool {
@@ -34,17 +34,17 @@ func (t *Task) IsActiveOn(target time.Time) bool {
 	target = target.Truncate(24 * time.Hour)
 
 	if t.Recurrence == nil || t.Recurrence.Type == None {
-		if t.StartDateTime.IsZero() {
+		if t.StartDate.IsZero() {
 			return false
 		}
-		return t.StartDateTime.Truncate(24 * time.Hour).Equal(target)
+		return t.StartDate.Truncate(24 * time.Hour).Equal(target)
 	}
 
-	if t.StartDateTime.IsZero() {
+	if t.StartDate.IsZero() {
 		return false
 	}
 
-	start := t.StartDateTime.Truncate(24 * time.Hour)
+	start := t.StartDate.Truncate(24 * time.Hour)
 
 	if target.Before(start) {
 		return false
@@ -66,7 +66,7 @@ func (t *Task) IsActiveOn(target time.Time) bool {
 		return days%r.IntervalDays == 0
 
 	case Monthly:
-		if r.DayOfMonth < 1 || r.DayOfMonth > 31 {
+		if r.DayOfMonth < 1 || r.DayOfMonth > 30 {
 			return false
 		}
 		return target.Day() == r.DayOfMonth
