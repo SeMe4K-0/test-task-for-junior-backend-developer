@@ -10,12 +10,15 @@ import (
 	"syscall"
 	"time"
 
+	taskdomain "example.com/taskservice/internal/domain/task"
 	infrastructurepostgres "example.com/taskservice/internal/infrastructure/postgres"
+	logic "example.com/taskservice/internal/logic/task"
 	postgresrepo "example.com/taskservice/internal/repository/postgres"
 	transporthttp "example.com/taskservice/internal/transport/http"
 	swaggerdocs "example.com/taskservice/internal/transport/http/docs"
 	httphandlers "example.com/taskservice/internal/transport/http/handlers"
 	"example.com/taskservice/internal/usecase/task"
+	"example.com/taskservice/internal/worker"
 )
 
 func main() {
@@ -36,7 +39,13 @@ func main() {
 	defer pool.Close()
 
 	taskRepo := postgresrepo.New(pool)
-	taskUsecase := task.NewService(taskRepo)
+	dateGenerator := logic.NewGenerator()
+	taskUsecase := task.NewService(taskRepo, dateGenerator, cfg.PlanningCounts)
+
+	// Initialize and start planner
+	planner := worker.NewPlanner(taskUsecase, cfg.PlannerInterval)
+	go planner.Start(ctx)
+
 	taskHandler := httphandlers.NewTaskHandler(taskUsecase)
 	docsHandler := swaggerdocs.NewHandler()
 	router := transporthttp.NewRouter(taskHandler, docsHandler)
@@ -67,14 +76,26 @@ func main() {
 }
 
 type config struct {
-	HTTPAddr    string
-	DatabaseDSN string
+	HTTPAddr        string
+	DatabaseDSN     string
+	PlannerInterval time.Duration
+	// Map for dates generation limits
+	PlanningCounts map[taskdomain.RecurrenceType]int
 }
 
 func loadConfig() config {
 	cfg := config{
-		HTTPAddr:    envOrDefault("HTTP_ADDR", ":8080"),
-		DatabaseDSN: envOrDefault("DATABASE_DSN", "postgres://postgres:postgres@localhost:5432/taskservice?sslmode=disable"),
+		HTTPAddr:        envOrDefault("HTTP_ADDR", ":8080"),
+		DatabaseDSN:     envOrDefault("DATABASE_DSN", "postgres://postgres:postgres@localhost:5432/taskservice?sslmode=disable"),
+		PlannerInterval: getDurationOrDefault("PLANNER_INTERVAL", 1*time.Minute), //Such an interval was chosen for testing purposes
+		PlanningCounts: map[taskdomain.RecurrenceType]int{
+
+			taskdomain.TypeDaily:   7,
+			taskdomain.TypeWeekly:  7,
+			taskdomain.TypeMonthly: 3, //quarter of the year
+			taskdomain.TypeParity:  7,
+			// Specific doesn't require a limit because always fully pregenerated
+		},
 	}
 
 	if cfg.DatabaseDSN == "" {
@@ -89,5 +110,14 @@ func envOrDefault(key, fallback string) string {
 		return value
 	}
 
+	return fallback
+}
+
+func getDurationOrDefault(key string, fallback time.Duration) time.Duration {
+	if value := os.Getenv(key); value != "" {
+		if duration, err := time.ParseDuration(value); err == nil {
+			return duration
+		}
+	}
 	return fallback
 }

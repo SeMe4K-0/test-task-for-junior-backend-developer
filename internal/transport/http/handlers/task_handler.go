@@ -21,16 +21,19 @@ func NewTaskHandler(usecase taskusecase.Usecase) *TaskHandler {
 }
 
 func (h *TaskHandler) Create(w http.ResponseWriter, r *http.Request) {
-	var req taskMutationDTO
+	var req taskCreateDTO
 	if err := decodeJSON(r, &req); err != nil {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
 
 	created, err := h.usecase.Create(r.Context(), taskusecase.CreateInput{
-		Title:       req.Title,
-		Description: req.Description,
-		Status:      req.Status,
+		Title:          req.Title,
+		Description:    req.Description,
+		Status:         req.Status,
+		ScheduledAt:    req.ScheduledAt,
+		RecurrenceType: req.RecurrenceType,
+		Recurrence:     req.Recurrence,
 	})
 	if err != nil {
 		writeUsecaseError(w, err)
@@ -63,16 +66,20 @@ func (h *TaskHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var req taskMutationDTO
+	var req taskUpdateDTO
 	if err := decodeJSON(r, &req); err != nil {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
 
 	updated, err := h.usecase.Update(r.Context(), id, taskusecase.UpdateInput{
-		Title:       req.Title,
-		Description: req.Description,
-		Status:      req.Status,
+		Title:          req.Title,
+		Description:    req.Description,
+		Status:         req.Status,
+		ScheduledAt:    req.ScheduledAt,
+		ApplyToAll:     req.ApplyToAll,
+		RecurrenceType: req.RecurrenceType,
+		Recurrence:     req.Recurrence,
 	})
 	if err != nil {
 		writeUsecaseError(w, err)
@@ -89,7 +96,35 @@ func (h *TaskHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.usecase.Delete(r.Context(), id); err != nil {
+	// Get mode from query parameter, default to "single"
+	modeStr := r.URL.Query().Get("mode")
+	if modeStr == "" {
+		modeStr = "single"
+	}
+
+	// Get deleteModified from query parameter, default to false
+	deleteModifiedStr := r.URL.Query().Get("deleteModified")
+	deleteModified := false
+
+	if deleteModifiedStr == "true" {
+		deleteModified = true
+	}
+
+	var mode taskdomain.DeleteMode
+	switch modeStr {
+	case "single":
+		mode = taskdomain.DeleteModeSingle
+	case "future":
+		mode = taskdomain.DeleteModeFuture
+	case "entire_series":
+		mode = taskdomain.DeleteModeEntireSeries
+	default:
+		writeError(w, http.StatusBadRequest,
+			errors.New("invalid mode parameter: "+modeStr+". Allowed values: single, future, entire_series"))
+		return
+	}
+
+	if err := h.usecase.Delete(r.Context(), id, mode, deleteModified); err != nil {
 		writeUsecaseError(w, err)
 		return
 	}
