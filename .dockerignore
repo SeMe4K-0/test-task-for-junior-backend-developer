@@ -5,3 +5,8 @@ bin
 tmp
 .DS_Store
 README.md
+Makefile
+.envrc
+.env.example
+.env
+.air.toml

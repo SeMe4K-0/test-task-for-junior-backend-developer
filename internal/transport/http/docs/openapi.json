@@ -2,8 +2,8 @@
   "openapi": "3.0.3",
   "info": {
     "title": "Task Service API",
-    "version": "1.0.0",
-    "description": "CRUD API for tasks built with clean architecture."
+    "version": "1.1.0",
+    "description": "CRUD API for tasks built with clean architecture. Supports one-time and recurring tasks."
   },
   "servers": [
     {
@@ -14,6 +14,10 @@
     {
       "name": "Tasks",
       "description": "Operations with tasks"
+    },
+    {
+      "name": "Recurrences",
+      "description": "Operations with recurrence rules"
     }
   ],
   "paths": {
@@ -37,21 +41,50 @@
       },
       "post": {
         "tags": ["Tasks"],
-        "summary": "Create task",
+        "summary": "Create task or recurrence rule",
+        "description": "Reccomend to generate recurrences using `go run ./cmd/seed/seed.go`. If the `recurrence` field is present, creates a recurrence rule and returns a `Task` with a `Recurrence` field. Otherwise creates a one-time task and returns a `Task` object.",
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/CreateTaskRequest" }
+              "schema": { "$ref": "#/components/schemas/CreateTaskRequest" },
+              "examples": {
+                "one-time task": {
+                  "summary": "One-time task",
+                  "value": {
+                    "title": "Провести обход пациентов",
+                    "description": "Терапевтическое отделение",
+                    "due_date": "2026-04-15T09:00:00Z",
+                    "status": "new"
+                  }
+                },
+                "recurring task": {
+                  "summary": "Recurring task (every 2 days)",
+                  "value": {
+                    "title": "Ежедневный обзвон пациентов",
+                    "description": "Обзвон по списку",
+                    "recurrence": {
+                      "start_date": "2026-04-01T00:00:00Z",
+                      "end_date": "2026-06-30T00:00:00Z",
+                      "interval_days": 2
+                    }
+                  }
+                }
+              }
             }
           }
         },
         "responses": {
           "201": {
-            "description": "Created task",
+            "description": "Created task or recurrence rule",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/Task" }
+                "schema": {
+                  "oneOf": [
+                    { "$ref": "#/components/schemas/Task" },
+                    { "$ref": "#/components/schemas/Recurrence" }
+                  ]
+                }
               }
             }
           },
@@ -131,6 +164,61 @@
           "404": { "$ref": "#/components/responses/NotFound" }
         }
       }
+    },
+    "/api/v1/tasks/generate": {
+      "post": {
+        "tags": ["Recurrences"],
+        "summary": "Generate tasks from all active recurrence rules",
+        "description": "Idempotent: re-running for the same date range will not create duplicates. Generates tasks for every active rule that matches dates in [from, to] inclusive.",
+        "parameters": [
+          {
+            "name": "from",
+            "in": "query",
+            "required": true,
+            "schema": { "type": "string", "format": "date", "example": "2026-04-01" }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": true,
+            "schema": { "type": "string", "format": "date", "example": "2026-04-30" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Tasks generated successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "string",
+                  "example": "ok"
+                }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "500": { "$ref": "#/components/responses/InternalError" }
+        }
+      }
+    },
+    "/api/v1/recurrences": {
+      "get": {
+        "tags": ["Recurrences"],
+        "summary": "List all recurrence rules",
+        "responses": {
+          "200": {
+            "description": "List of recurrence rules",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/Recurrence" }
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -150,6 +238,14 @@
             "schema": { "$ref": "#/components/schemas/Error" }
           }
         }
+      },
+      "InternalError": {
+        "description": "Internal server error",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/Error" }
+          }
+        }
       }
     },
     "schemas": {
@@ -159,16 +255,26 @@
         "properties": {
           "title": {
             "type": "string",
-            "example": "Prepare release"
+            "example": "Провести обход пациентов"
           },
           "description": {
             "type": "string",
-            "example": "Collect release notes and check migrations"
+            "example": "Терапевтическое отделение, 15 пациентов"
+          },
+          "due_date": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Required when creating a one-time task. Ignored when `recurrence` is set.",
+            "example": "2026-04-15T09:00:00Z"
           },
           "status": {
             "type": "string",
-            "enum": ["new", "in_progress", "done"],
+            "enum": ["new", "in_progress", "done", "canceled"],
             "example": "new"
+          },
+          "recurrence": {
+            "$ref": "#/components/schemas/RecurrenceInput",
+            "description": "When present, a recurrence rule is created instead of a one-time task."
           }
         }
       },
@@ -178,15 +284,15 @@
         "properties": {
           "title": {
             "type": "string",
-            "example": "Prepare release"
+            "example": "Провести обход пациентов"
           },
           "description": {
             "type": "string",
-            "example": "Collect release notes and check migrations"
+            "example": "Терапевтическое отделение, 15 пациентов"
           },
           "status": {
             "type": "string",
-            "enum": ["new", "in_progress", "done"],
+            "enum": ["new", "in_progress", "done", "canceled"],
             "example": "in_progress"
           }
         }
@@ -195,15 +301,131 @@
         "type": "object",
         "properties": {
           "id": { "type": "integer", "format": "int64", "example": 1 },
-          "title": { "type": "string", "example": "Prepare release" },
+          "rule_id": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true,
+            "description": "ID of the recurrence rule that generated this task. Null for one-time tasks.",
+            "example": 3
+          },
+          "title": { "type": "string", "example": "Провести обход пациентов" },
           "description": {
             "type": "string",
-            "example": "Collect release notes and check migrations"
+            "example": "Терапевтическое отделение, 15 пациентов"
           },
           "status": {
             "type": "string",
-            "enum": ["new", "in_progress", "done"],
+            "enum": ["new", "in_progress", "done", "canceled"],
             "example": "new"
+          },
+          "due_date": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "example": "2026-04-15T09:00:00Z"
+          },
+          "scheduled_for": {
+            "type": "string",
+            "format": "date",
+            "nullable": true,
+            "description": "The date this task was generated for. Set only on tasks created via a recurrence rule.",
+            "example": "2026-04-15"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2026-03-24T00:00:00Z"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2026-03-24T00:00:00Z"
+          }
+        }
+      },
+      "RecurrenceInput": {
+        "type": "object",
+        "description": "Exactly one of `interval_days`, `month_days`, `specific_dates`, or `even_odd` must be set.",
+        "properties": {
+          "start_date": {
+            "type": "string",
+            "format": "date",
+            "description": "Defaults to today if not specified.",
+            "example": "2026-04-01"
+          },
+          "end_date": {
+            "type": "string",
+            "format": "date",
+            "nullable": true,
+            "description": "Optional. Rule is open-ended if not set.",
+            "example": "2026-12-31"
+          },
+          "interval_days": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Every N days starting from `start_date`. Mutually exclusive with other recurrence types.",
+            "example": 2
+          },
+          "month_days": {
+            "type": "array",
+            "items": { "type": "integer", "minimum": 1, "maximum": 30 },
+            "description": "Specific days of the month (1–30). Mutually exclusive with other recurrence types.",
+            "example": [1, 15]
+          },
+          "specific_dates": {
+            "type": "array",
+            "items": { "type": "string", "format": "date" },
+            "description": "Exact dates to create tasks on. Mutually exclusive with other recurrence types.",
+            "example": ["2026-04-10", "2026-05-01"]
+          },
+          "even_odd": {
+            "type": "string",
+            "enum": ["even", "odd"],
+            "description": "Even or odd days of the month. Mutually exclusive with other recurrence types.",
+            "example": "even"
+          }
+        }
+      },
+      "Recurrence": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer", "format": "int64", "example": 1 },
+          "title": { "type": "string", "example": "Ежедневный обзвон пациентов" },
+          "description": { "type": "string", "example": "Обзвон по списку" },
+          "active": { "type": "boolean", "example": true },
+          "start_date": {
+            "type": "string",
+            "format": "date",
+            "example": "2026-04-01"
+          },
+          "end_date": {
+            "type": "string",
+            "format": "date",
+            "nullable": true,
+            "example": "2026-12-31"
+          },
+          "interval_days": {
+            "type": "integer",
+            "nullable": true,
+            "example": 2
+          },
+          "month_days": {
+            "type": "array",
+            "items": { "type": "integer" },
+            "nullable": true,
+            "example": [1, 15]
+          },
+          "specific_dates": {
+            "type": "array",
+            "items": { "type": "string", "format": "date" },
+            "nullable": true,
+            "example": ["2026-04-10", "2026-05-01"]
+          },
+          "even_odd": {
+            "type": "string",
+            "enum": ["even", "odd"],
+            "nullable": true,
+            "example": "even"
           },
           "created_at": {
             "type": "string",

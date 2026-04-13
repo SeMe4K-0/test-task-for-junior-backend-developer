@@ -14,7 +14,9 @@ services:
       retries: 10
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./migrations/0001_create_tasks.up.sql:/docker-entrypoint-initdb.d/001_create_tasks.sql:ro
+      - ./migrations/000001_create_tasks.up.sql:/docker-entrypoint-initdb.d/000001_create_tasks.sql:ro
+      - ./migrations/000002_create_task_generation_rules.up.sql:/docker-entrypoint-initdb.d/000002_create_task_generation_rules.sql:ro
+      - ./migrations/000003_alter_recurrence_and_tasks_table.up.sql:/docker-entrypoint-initdb.d/000003_alter_recurrence_and_tasks_table.sql:ro
 
   app:
     build:
@@ -28,6 +30,11 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+
+  adminer:
+    image: adminer
+    ports:
+      - 9090:8080
 
 volumes:
   postgres_data:

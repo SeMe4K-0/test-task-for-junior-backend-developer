@@ -1,10 +1,11 @@
 package handlers
 
 import (
-	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/gorilla/mux"
 
@@ -20,6 +21,63 @@ func NewTaskHandler(usecase taskusecase.Usecase) *TaskHandler {
 	return &TaskHandler{usecase: usecase}
 }
 
+// Recurrence
+
+func (h *TaskHandler) ListRecurrence(w http.ResponseWriter, r *http.Request) {
+	recurrences, err := h.usecase.ListRecurrence(r.Context())
+	if err != nil {
+		writeUsecaseError(w, err)
+		return
+	}
+
+	response := make([]recurrenceDTO, 0, len(recurrences))
+	for i := range recurrences {
+		response = append(response, newReccurenceDTO(&recurrences[i]))
+	}
+
+	writeJSON(w, http.StatusOK, response)
+}
+
+func (h *TaskHandler) CreateRecurrencedTasks(w http.ResponseWriter, r *http.Request) {
+	query := r.URL.Query()
+	fromStr := query.Get("from")
+	toStr := query.Get("to")
+
+	layout := "2006-01-02"
+
+	if fromStr == "" || toStr == "" {
+		writeUsecaseError(w, errors.New("params 'from' and 'to' must be specified"))
+		return
+	}
+
+	from, err := time.Parse(layout, fromStr)
+	if err != nil {
+		writeUsecaseError(w, errors.New("invalid 'from' format"))
+		return
+	}
+	to, err := time.Parse(layout, toStr)
+	if err != nil {
+		writeUsecaseError(w, errors.New("invalid 'to' format"))
+		return
+	}
+	maxRange := 30
+
+	if to.Sub(from) > time.Duration(maxRange)*24*time.Hour {
+		writeUsecaseError(w, fmt.Errorf("range exceeds maximum allowed %d days", maxRange))
+	}
+
+	err = h.usecase.CreateRecurrencedTasks(r.Context(), from, to)
+
+	if err != nil {
+		writeUsecaseError(w, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, "ok")
+}
+
+// Tasks
+
 func (h *TaskHandler) Create(w http.ResponseWriter, r *http.Request) {
 	var req taskMutationDTO
 	if err := decodeJSON(r, &req); err != nil {
@@ -27,16 +85,39 @@ func (h *TaskHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	created, err := h.usecase.Create(r.Context(), taskusecase.CreateInput{
+	if req.Recurrence != nil {
+		recurrence := taskusecase.CreateRecurrenceInput{
+			Title:       req.Title,
+			Description: req.Description,
+			Recurrence: taskusecase.Recurrence{
+				StartDate:     req.Recurrence.StartDate,
+				EndDate:       req.Recurrence.EndDate,
+				IntervalDays:  req.Recurrence.IntervalDays,
+				MonthDays:     req.Recurrence.MonthDays,
+				SpecificDates: req.Recurrence.SpecificDates,
+				EvenOdd:       req.Recurrence.EvenOdd,
+			},
+		}
+		created, err := h.usecase.CreateRecurrence(r.Context(), recurrence)
+		if err != nil {
+			writeUsecaseError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusCreated, newReccurenceDTO(created))
+		return
+	}
+
+	task := taskusecase.CreateInput{
 		Title:       req.Title,
 		Description: req.Description,
+		DueDate:     *req.DueDate,
 		Status:      req.Status,
-	})
+	}
+	created, err := h.usecase.Create(r.Context(), task)
 	if err != nil {
 		writeUsecaseError(w, err)
 		return
 	}
-
 	writeJSON(w, http.StatusCreated, newTaskDTO(created))
 }
 
@@ -130,19 +211,10 @@ func getIDFromRequest(r *http.Request) (int64, error) {
 	return id, nil
 }
 
-func decodeJSON(r *http.Request, dst any) error {
-	decoder := json.NewDecoder(r.Body)
-	decoder.DisallowUnknownFields()
-
-	if err := decoder.Decode(dst); err != nil {
-		return err
-	}
-
-	return nil
-}
-
 func writeUsecaseError(w http.ResponseWriter, err error) {
 	switch {
+	case errors.Is(err, taskusecase.ErrInvalidRecurrenceInput):
+		writeError(w, http.StatusBadRequest, err)
 	case errors.Is(err, taskdomain.ErrNotFound):
 		writeError(w, http.StatusNotFound, err)
 	case errors.Is(err, taskusecase.ErrInvalidInput):
@@ -150,17 +222,4 @@ func writeUsecaseError(w http.ResponseWriter, err error) {
 	default:
 		writeError(w, http.StatusInternalServerError, err)
 	}
-}
-
-func writeError(w http.ResponseWriter, status int, err error) {
-	writeJSON(w, status, map[string]string{
-		"error": err.Error(),
-	})
-}
-
-func writeJSON(w http.ResponseWriter, status int, payload any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-
-	_ = json.NewEncoder(w).Encode(payload)
 }

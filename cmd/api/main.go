@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
@@ -10,12 +9,14 @@ import (
 	"syscall"
 	"time"
 
+	"example.com/taskservice/internal/config"
 	infrastructurepostgres "example.com/taskservice/internal/infrastructure/postgres"
 	postgresrepo "example.com/taskservice/internal/repository/postgres"
 	transporthttp "example.com/taskservice/internal/transport/http"
 	swaggerdocs "example.com/taskservice/internal/transport/http/docs"
 	httphandlers "example.com/taskservice/internal/transport/http/handlers"
 	"example.com/taskservice/internal/usecase/task"
+	"example.com/taskservice/internal/worker"
 )
 
 func main() {
@@ -23,7 +24,7 @@ func main() {
 		Level: slog.LevelInfo,
 	}))
 
-	cfg := loadConfig()
+	cfg := config.LoadConfig()
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
@@ -47,6 +48,29 @@ func main() {
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
+	// worker
+	w := worker.NewRecurrenceWorker(taskUsecase, logger, cfg.Worker)
+	ticker := time.NewTicker(cfg.Worker.Interval)
+	defer ticker.Stop()
+
+	go func() {
+		if err := w.Run(ctx); err != nil {
+			logger.Error("worker initial run failed", "error", err)
+		}
+		for {
+			select {
+			case <-ctx.Done():
+				logger.Info("recurrence worker stopped")
+				return
+			case t := <-ticker.C:
+				logger.Info("worker tick", "time", t)
+				if err := w.Run(ctx); err != nil {
+					logger.Error("worker run failed", "error", err)
+				}
+			}
+		}
+	}()
+
 	go func() {
 		<-ctx.Done()
 
@@ -64,30 +88,4 @@ func main() {
 		logger.Error("listen and serve", "error", err)
 		os.Exit(1)
 	}
-}
-
-type config struct {
-	HTTPAddr    string
-	DatabaseDSN string
-}
-
-func loadConfig() config {
-	cfg := config{
-		HTTPAddr:    envOrDefault("HTTP_ADDR", ":8080"),
-		DatabaseDSN: envOrDefault("DATABASE_DSN", "postgres://postgres:postgres@localhost:5432/taskservice?sslmode=disable"),
-	}
-
-	if cfg.DatabaseDSN == "" {
-		panic(fmt.Errorf("DATABASE_DSN is required"))
-	}
-
-	return cfg
-}
-
-func envOrDefault(key, fallback string) string {
-	if value := os.Getenv(key); value != "" {
-		return value
-	}
-
-	return fallback
 }

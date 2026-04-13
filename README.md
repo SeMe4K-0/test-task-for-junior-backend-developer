@@ -1,3 +1,13 @@
+# Updates
+
+Рекомендую заполнить таблицу тестовыми данными, чтобы не создавать вручную
+```bash
+go run ./cmd/seed/seed.go
+```
+
+Откройте [Decisions.md](./Decisions.md) чтобы посмотреть мои комментарии по задачам. Важно ознакомиться с данными в этом файле, чтобы понять почему были приняты те или иные решения. Некоторые реализации были пропущены специально, но описаны в этом файле
+
+
 # Task Service
 
 Сервис для управления задачами с HTTP API на Go.
@@ -47,8 +57,10 @@ http://localhost:8080/swagger/openapi.json
 ```
 
 Основные маршруты:
+- `GET /api/v1/recurrences`
+- `POST /api/v1/tasks/generate?from={from}&to={to}`
 
-- `POST /api/v1/tasks`
+
 - `GET /api/v1/tasks`
 - `GET /api/v1/tasks/{id}`
 - `PUT /api/v1/tasks/{id}`
