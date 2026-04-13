@@ -27,10 +27,18 @@ func (s *Service) Create(ctx context.Context, input CreateInput) (*taskdomain.Ta
 		return nil, err
 	}
 
+	if input.Recurrence != nil {
+		if err := input.Recurrence.Validate(); err != nil {
+			return nil, fmt.Errorf("%w: %v", ErrInvalidInput, err)
+		}
+	}
+
 	model := &taskdomain.Task{
 		Title:       normalized.Title,
 		Description: normalized.Description,
 		Status:      normalized.Status,
+		Recurrence:  input.Recurrence,
+		StartDate:   normalized.StartDate,
 	}
 	now := s.now()
 	model.CreatedAt = now
@@ -62,11 +70,19 @@ func (s *Service) Update(ctx context.Context, id int64, input UpdateInput) (*tas
 		return nil, err
 	}
 
+	if input.Recurrence != nil {
+		if err := input.Recurrence.Validate(); err != nil {
+			return nil, fmt.Errorf("%w: %v", ErrInvalidInput, err)
+		}
+	}
+
 	model := &taskdomain.Task{
 		ID:          id,
 		Title:       normalized.Title,
 		Description: normalized.Description,
 		Status:      normalized.Status,
+		Recurrence:  input.Recurrence,
+		StartDate:   normalized.StartDate,
 		UpdatedAt:   s.now(),
 	}
 
@@ -90,6 +106,25 @@ func (s *Service) List(ctx context.Context) ([]taskdomain.Task, error) {
 	return s.repo.List(ctx)
 }
 
+func (s *Service) GetByDate(ctx context.Context, date time.Time) ([]taskdomain.Task, error) {
+	tasks, err := s.repo.List(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	date = date.Truncate(24 * time.Hour)
+
+	result := make([]taskdomain.Task, 0)
+
+	for _, t := range tasks {
+		if t.IsActiveOn(date) {
+			result = append(result, t)
+		}
+	}
+
+	return result, nil
+}
+
 func validateCreateInput(input CreateInput) (CreateInput, error) {
 	input.Title = strings.TrimSpace(input.Title)
 	input.Description = strings.TrimSpace(input.Description)
@@ -106,6 +141,10 @@ func validateCreateInput(input CreateInput) (CreateInput, error) {
 		return CreateInput{}, fmt.Errorf("%w: invalid status", ErrInvalidInput)
 	}
 
+	if input.StartDate.IsZero() {
+		return CreateInput{}, fmt.Errorf("%w: start_date is required", ErrInvalidInput)
+	}
+
 	return input, nil
 }
 
@@ -119,6 +158,10 @@ func validateUpdateInput(input UpdateInput) (UpdateInput, error) {
 
 	if !input.Status.Valid() {
 		return UpdateInput{}, fmt.Errorf("%w: invalid status", ErrInvalidInput)
+	}
+
+	if input.StartDate.IsZero() {
+		return UpdateInput{}, fmt.Errorf("%w: start_date is required", ErrInvalidInput)
 	}
 
 	return input, nil
