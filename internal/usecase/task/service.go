@@ -31,7 +31,9 @@ func (s *Service) Create(ctx context.Context, input CreateInput) (*taskdomain.Ta
 		Title:       normalized.Title,
 		Description: normalized.Description,
 		Status:      normalized.Status,
+		Repeated:    normalized.Repeated,
 	}
+
 	now := s.now()
 	model.CreatedAt = now
 	model.UpdatedAt = now
@@ -67,6 +69,7 @@ func (s *Service) Update(ctx context.Context, id int64, input UpdateInput) (*tas
 		Title:       normalized.Title,
 		Description: normalized.Description,
 		Status:      normalized.Status,
+		Repeated:    normalized.Repeated,
 		UpdatedAt:   s.now(),
 	}
 
@@ -106,6 +109,12 @@ func validateCreateInput(input CreateInput) (CreateInput, error) {
 		return CreateInput{}, fmt.Errorf("%w: invalid status", ErrInvalidInput)
 	}
 
+	repeated, err := normalizeRepeated(input.Repeated)
+	if err != nil {
+		return CreateInput{}, err
+	}
+	input.Repeated = repeated
+
 	return input, nil
 }
 
@@ -121,5 +130,82 @@ func validateUpdateInput(input UpdateInput) (UpdateInput, error) {
 		return UpdateInput{}, fmt.Errorf("%w: invalid status", ErrInvalidInput)
 	}
 
+	repeated, err := normalizeRepeated(input.Repeated)
+	if err != nil {
+		return UpdateInput{}, err
+	}
+	input.Repeated = repeated
+
 	return input, nil
+}
+
+func normalizeRepeated(r taskdomain.Repeated) (taskdomain.Repeated, error) {
+	if r.Type == "" {
+		r.Type = taskdomain.PeriodNone
+	}
+
+	if !r.Valid() {
+		return taskdomain.Repeated{}, fmt.Errorf("%w: invalid repeated settings", ErrInvalidInput)
+	}
+
+	switch r.Type {
+	case taskdomain.PeriodNone:
+		return taskdomain.Repeated{
+			Type: taskdomain.PeriodNone,
+		}, nil
+
+	case taskdomain.PeriodEveryNDays:
+		return taskdomain.Repeated{
+			Type:       taskdomain.PeriodEveryNDays,
+			EveryNDays: r.EveryNDays,
+		}, nil
+
+	case taskdomain.PeriodMonthlyDay:
+		return taskdomain.Repeated{
+			Type:       taskdomain.PeriodMonthlyDay,
+			DayOfMonth: r.DayOfMonth,
+		}, nil
+
+	case taskdomain.PeriodSpecificDates:
+		return taskdomain.Repeated{
+			Type:          taskdomain.PeriodSpecificDates,
+			SpecificDates: normalizeSpecificDates(r.SpecificDates),
+		}, nil
+
+	case taskdomain.PeriodEvenDays:
+		return taskdomain.Repeated{
+			Type: taskdomain.PeriodEvenDays,
+		}, nil
+
+	case taskdomain.PeriodOddDays:
+		return taskdomain.Repeated{
+			Type: taskdomain.PeriodOddDays,
+		}, nil
+
+	default:
+		return taskdomain.Repeated{}, fmt.Errorf("%w: invalid repeated type", ErrInvalidInput)
+	}
+}
+
+func normalizeSpecificDates(dates []time.Time) []time.Time {
+	if len(dates) == 0 {
+		return nil
+	}
+
+	result := make([]time.Time, 0, len(dates))
+	seen := make(map[string]struct{}, len(dates))
+
+	for _, d := range dates {
+		normalized := time.Date(d.UTC().Year(), d.UTC().Month(), d.UTC().Day(), 0, 0, 0, 0, time.UTC)
+		key := normalized.Format("2006-01-02")
+
+		if _, ok := seen[key]; ok {
+			continue
+		}
+
+		seen[key] = struct{}{}
+		result = append(result, normalized)
+	}
+
+	return result
 }
