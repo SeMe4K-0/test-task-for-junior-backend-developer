@@ -21,6 +21,20 @@
       "get": {
         "tags": ["Tasks"],
         "summary": "List tasks",
+        "parameters": [
+          {
+            "name": "from",
+            "in": "query",
+            "description": "Начало периода (формат YYYY-MM-DD)",
+            "schema": { "type": "string", "format": "date", "example": "2026-03-01" }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "description": "Конец периода (формат YYYY-MM-DD)",
+            "schema": { "type": "string", "format": "date", "example": "2026-04-01" }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Task list",
@@ -32,7 +46,8 @@
                 }
               }
             }
-          }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" }
         }
       },
       "post": {
@@ -56,6 +71,33 @@
             }
           },
           "400": { "$ref": "#/components/responses/BadRequest" }
+        }
+      }
+    },
+    "/api/v1/tasks/materialize": {
+      "post": {
+        "tags": ["Tasks"],
+        "summary": "materialize virtual task",
+        "description": "virtual task to real task conversion",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/MaterializeTaskRequest" }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Задача успешно сохранена в базу",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Task" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "409": { "$ref": "#/components/responses/Conflict" }
         }
       }
     },
@@ -131,6 +173,45 @@
           "404": { "$ref": "#/components/responses/NotFound" }
         }
       }
+    },
+    "/api/v1/tasks/rules": {
+      "get": {
+        "tags": ["Tasks"],
+        "summary": "List all rules",
+        "description": "Возвращает все правила периодичности",
+        "responses": {
+          "200": {
+            "description": "List of rules",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/TaskRule" }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/tasks/rules/{id}": {
+      "delete": {
+        "tags": ["Tasks"],
+        "summary": "Delete rule",
+        "description": "Удаляет правило периодичности и все связанные задачи",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "integer", "format": "int64", "minimum": 1 }
+          }
+        ],
+        "responses": {
+          "204": { "description": "Deleted" },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
     }
   },
   "components": {
@@ -150,9 +231,44 @@
             "schema": { "$ref": "#/components/schemas/Error" }
           }
         }
-      }
+      },
+      "Conflict": {
+        "description": "Resource already exists",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/Error" }
+          }
+        }
+       }
     },
     "schemas": {
+      "Recurrence": {
+        "type": "object",
+        "required": ["type", "start_date", "value"],
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": ["daily", "monthly", "specific_dates", "even_days", "odd_days"],
+            "example": "daily"
+          },
+          "start_date": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2026-03-01T00:00:00Z"
+          },
+          "end_date": {
+            "type": "string",
+            "format": "date-time",
+            "description": "end date.",
+            "example": "2026-03-01T00:00:00Z"
+          },
+          "value": {
+            "type": "object",
+            "description": "depends on type. daily: {\"interval\": 3}. monthly: {\"days\": [1, 15]}. specific_dates: {\"dates\": [\"2026-03-15\"]}. even_days/odd_days: {}.",
+            "example": {"interval": 2}
+          }
+        }
+      },
       "CreateTaskRequest": {
         "type": "object",
         "required": ["title"],
@@ -169,7 +285,13 @@
             "type": "string",
             "enum": ["new", "in_progress", "done"],
             "example": "new"
-          }
+          },
+          "execution_date": {
+              "type": "string",
+              "format": "date-time",
+              "example": "2026-03-01T00:00:00Z"
+          },
+          "recurrence": { "$ref": "#/components/schemas/Recurrence" }
         }
       },
       "UpdateTaskRequest": {
@@ -188,13 +310,30 @@
             "type": "string",
             "enum": ["new", "in_progress", "done"],
             "example": "in_progress"
+          },
+          "execution_date": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2026-03-01T00:00:00Z"
           }
+        }
+      },
+      "MaterializeTaskRequest": {
+        "type": "object",
+        "required": ["title", "status", "execution_date", "rule_id"],
+        "properties": {
+          "title": { "type": "string" },
+          "description": { "type": "string" },
+          "status": { "type": "string", "enum": ["new", "in_progress", "done"] },
+          "execution_date": { "type": "string", "format": "date-time" },
+          "rule_id": { "type": "integer", "format": "int64" }
         }
       },
       "Task": {
         "type": "object",
         "properties": {
-          "id": { "type": "integer", "format": "int64", "example": 1 },
+          "id": { "type": "integer", "format": "int64", "nullable": true, "example": 1 },
+          "is_virtual": { "type": "boolean", "example": false },
           "title": { "type": "string", "example": "Prepare release" },
           "description": {
             "type": "string",
@@ -205,16 +344,43 @@
             "enum": ["new", "in_progress", "done"],
             "example": "new"
           },
+          "execution_date": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2026-03-01T00:00:00Z"
+          },
+          "rule_id": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true,
+            "example": 5
+          },
           "created_at": {
             "type": "string",
             "format": "date-time",
-            "example": "2026-03-24T00:00:00Z"
+            "example": "2026-03-01T00:00:00Z"
           },
           "updated_at": {
             "type": "string",
             "format": "date-time",
             "example": "2026-03-24T00:00:00Z"
           }
+        }
+      },
+      "TaskRule": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer", "format": "int64", "example": 1 },
+          "title": { "type": "string", "example": "Ежедневный обзвон" },
+          "description": { "type": "string" },
+          "recurrence_type": {
+            "type": "string",
+            "enum": ["daily", "monthly", "specific_dates", "even_days", "odd_days"]
+          },
+          "recurrence_value": { "type": "object" },
+          "start_date": { "type": "string", "format": "date-time" },
+          "end_date": { "type": "string", "format": "date-time", "nullable": true },
+          "created_at": { "type": "string", "format": "date-time" }
         }
       },
       "Error": {
