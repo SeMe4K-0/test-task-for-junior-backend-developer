@@ -27,11 +27,25 @@ func (h *TaskHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	created, err := h.usecase.Create(r.Context(), taskusecase.CreateInput{
+	input := taskusecase.CreateInput{
 		Title:       req.Title,
 		Description: req.Description,
 		Status:      req.Status,
-	})
+	}
+
+	if req.Recurrence != nil {
+		input.Recurrence = &taskusecase.RecurrenceInput{
+			Type:          taskdomain.RecurrenceType(req.Recurrence.Type),
+			IntervalDays:  req.Recurrence.IntervalDays,
+			DayOfMonth:    req.Recurrence.DayOfMonth,
+			SpecificDates: req.Recurrence.SpecificDates,
+			EvenOdd:       req.Recurrence.EvenOdd,
+			StartDate:     req.Recurrence.StartDate,
+			EndDate:       req.Recurrence.EndDate,
+		}
+	}
+
+	created, err := h.usecase.Create(r.Context(), input)
 	if err != nil {
 		writeUsecaseError(w, err)
 		return
@@ -98,7 +112,20 @@ func (h *TaskHandler) Delete(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *TaskHandler) List(w http.ResponseWriter, r *http.Request) {
-	tasks, err := h.usecase.List(r.Context())
+	// Поддержка фильтрации по дате: GET /api/v1/tasks?date=2026-04-15
+	dateFilter := r.URL.Query().Get("date")
+
+	var (
+		tasks []taskdomain.Task
+		err   error
+	)
+
+	if dateFilter != "" {
+		tasks, err = h.usecase.ListByDate(r.Context(), dateFilter)
+	} else {
+		tasks, err = h.usecase.List(r.Context())
+	}
+
 	if err != nil {
 		writeUsecaseError(w, err)
 		return
@@ -110,6 +137,72 @@ func (h *TaskHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, response)
+}
+
+// GetRecurrence возвращает правило периодичности для задачи.
+func (h *TaskHandler) GetRecurrence(w http.ResponseWriter, r *http.Request) {
+	id, err := getIDFromRequest(r)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+
+	rule, err := h.usecase.GetRecurrence(r.Context(), id)
+	if err != nil {
+		writeUsecaseError(w, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, newRecurrenceDTO(rule))
+}
+
+// UpdateRecurrence обновляет правило периодичности для задачи-шаблона.
+func (h *TaskHandler) UpdateRecurrence(w http.ResponseWriter, r *http.Request) {
+	id, err := getIDFromRequest(r)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+
+	var req recurrenceInputDTO
+	if err := decodeJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+
+	input := taskusecase.RecurrenceInput{
+		Type:          taskdomain.RecurrenceType(req.Type),
+		IntervalDays:  req.IntervalDays,
+		DayOfMonth:    req.DayOfMonth,
+		SpecificDates: req.SpecificDates,
+		EvenOdd:       req.EvenOdd,
+		StartDate:     req.StartDate,
+		EndDate:       req.EndDate,
+	}
+
+	rule, err := h.usecase.UpdateRecurrence(r.Context(), id, input)
+	if err != nil {
+		writeUsecaseError(w, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, newRecurrenceDTO(rule))
+}
+
+// DeleteRecurrence удаляет правило периодичности для задачи.
+func (h *TaskHandler) DeleteRecurrence(w http.ResponseWriter, r *http.Request) {
+	id, err := getIDFromRequest(r)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+
+	if err := h.usecase.DeleteRecurrence(r.Context(), id); err != nil {
+		writeUsecaseError(w, err)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func getIDFromRequest(r *http.Request) (int64, error) {

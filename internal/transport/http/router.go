@@ -24,5 +24,10 @@ func NewRouter(taskHandler *httphandlers.TaskHandler, docsHandler *swaggerdocs.H
 	api.HandleFunc("/tasks/{id:[0-9]+}", taskHandler.Update).Methods(http.MethodPut)
 	api.HandleFunc("/tasks/{id:[0-9]+}", taskHandler.Delete).Methods(http.MethodDelete)
 
+	// Recurrence endpoints
+	api.HandleFunc("/tasks/{id:[0-9]+}/recurrence", taskHandler.GetRecurrence).Methods(http.MethodGet)
+	api.HandleFunc("/tasks/{id:[0-9]+}/recurrence", taskHandler.UpdateRecurrence).Methods(http.MethodPut)
+	api.HandleFunc("/tasks/{id:[0-9]+}/recurrence", taskHandler.DeleteRecurrence).Methods(http.MethodDelete)
+
 	return router
 }
