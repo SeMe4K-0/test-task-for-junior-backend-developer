@@ -15,7 +15,9 @@ import (
 	transporthttp "example.com/taskservice/internal/transport/http"
 	swaggerdocs "example.com/taskservice/internal/transport/http/docs"
 	httphandlers "example.com/taskservice/internal/transport/http/handlers"
+	"example.com/taskservice/internal/usecase/schedule"
 	"example.com/taskservice/internal/usecase/task"
+	"example.com/taskservice/internal/worker/schedulerunner"
 )
 
 func main() {
@@ -35,11 +37,19 @@ func main() {
 	}
 	defer pool.Close()
 
-	taskRepo := postgresrepo.New(pool)
+	taskRepo := postgresrepo.NewTaskRepository(pool)
 	taskUsecase := task.NewService(taskRepo)
 	taskHandler := httphandlers.NewTaskHandler(taskUsecase)
+
+	scheduleRepo := postgresrepo.NewScheduleRepository(pool)
+	scheduleUsecase := schedule.NewService(scheduleRepo)
+	scheduleHandler := httphandlers.NewScheduleHandler(scheduleUsecase)
+
+	runner := schedulerunner.New(taskRepo, scheduleRepo, logger, cfg.SchedulerInterval)
+	go runner.Start(ctx)
+
 	docsHandler := swaggerdocs.NewHandler()
-	router := transporthttp.NewRouter(taskHandler, docsHandler)
+	router := transporthttp.NewRouter(taskHandler, scheduleHandler, docsHandler)
 
 	server := &http.Server{
 		Addr:              cfg.HTTPAddr,
@@ -67,14 +77,16 @@ func main() {
 }
 
 type config struct {
-	HTTPAddr    string
-	DatabaseDSN string
+	HTTPAddr          string
+	DatabaseDSN       string
+	SchedulerInterval time.Duration
 }
 
 func loadConfig() config {
 	cfg := config{
-		HTTPAddr:    envOrDefault("HTTP_ADDR", ":8080"),
-		DatabaseDSN: envOrDefault("DATABASE_DSN", "postgres://postgres:postgres@localhost:5432/taskservice?sslmode=disable"),
+		HTTPAddr:          envOrDefault("HTTP_ADDR", ":8080"),
+		DatabaseDSN:       envOrDefault("DATABASE_DSN", "postgres://postgres:postgres@localhost:5432/taskservice?sslmode=disable"),
+		SchedulerInterval: parseDurationOrDefault("SCHEDULER_INTERVAL", time.Hour),
 	}
 
 	if cfg.DatabaseDSN == "" {
@@ -82,6 +94,20 @@ func loadConfig() config {
 	}
 
 	return cfg
+}
+
+func parseDurationOrDefault(key string, fallback time.Duration) time.Duration {
+	raw := os.Getenv(key)
+	if raw == "" {
+		return fallback
+	}
+
+	d, err := time.ParseDuration(raw)
+	if err != nil {
+		return fallback
+	}
+
+	return d
 }
 
 func envOrDefault(key, fallback string) string {
