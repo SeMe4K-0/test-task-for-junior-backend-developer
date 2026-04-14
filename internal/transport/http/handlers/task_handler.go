@@ -3,6 +3,8 @@ package handlers
 import (
 	"encoding/json"
 	"errors"
+	scheduledomain "example.com/taskservice/internal/domain/schedule"
+	scheduleusecase "example.com/taskservice/internal/usecase/schedule"
 	"net/http"
 	"strconv"
 
@@ -146,6 +148,10 @@ func writeUsecaseError(w http.ResponseWriter, err error) {
 	case errors.Is(err, taskdomain.ErrNotFound):
 		writeError(w, http.StatusNotFound, err)
 	case errors.Is(err, taskusecase.ErrInvalidInput):
+		writeError(w, http.StatusBadRequest, err)
+	case errors.Is(err, scheduledomain.ErrNotFound):
+		writeError(w, http.StatusNotFound, err)
+	case errors.Is(err, scheduleusecase.ErrInvalidInput):
 		writeError(w, http.StatusBadRequest, err)
 	default:
 		writeError(w, http.StatusInternalServerError, err)
