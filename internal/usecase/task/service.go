@@ -83,11 +83,33 @@ func (s *Service) Delete(ctx context.Context, id int64) error {
 		return fmt.Errorf("%w: id must be positive", ErrInvalidInput)
 	}
 
-	return s.repo.Delete(ctx, id)
+	return s.repo.Delete(ctx, id, s.now())
 }
 
-func (s *Service) List(ctx context.Context) ([]taskdomain.Task, error) {
-	return s.repo.List(ctx)
+func (s *Service) Restore(ctx context.Context, id int64) (*taskdomain.Task, error) {
+	if id <= 0 {
+		return nil, fmt.Errorf("%w: id must be positive", ErrInvalidInput)
+	}
+
+	return s.repo.Restore(ctx, id, s.now())
+}
+
+func (s *Service) List(ctx context.Context, pagination Pagination) (*ListOutput, error) {
+	p := pagination.Normalize()
+	tasks, total, err := s.repo.List(ctx, p)
+	if err != nil {
+		return nil, err
+	}
+	return &ListOutput{Tasks: tasks, Total: total, Page: p.Page, Limit: p.Limit}, nil
+}
+
+func (s *Service) ListWithFilter(ctx context.Context, filter ListFilter, pagination Pagination) (*ListOutput, error) {
+	p := pagination.Normalize()
+	tasks, total, err := s.repo.ListWithFilter(ctx, filter, p)
+	if err != nil {
+		return nil, err
+	}
+	return &ListOutput{Tasks: tasks, Total: total, Page: p.Page, Limit: p.Limit}, nil
 }
 
 func validateCreateInput(input CreateInput) (CreateInput, error) {

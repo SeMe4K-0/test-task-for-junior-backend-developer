@@ -2,8 +2,8 @@
   "openapi": "3.0.3",
   "info": {
     "title": "Task Service API",
-    "version": "1.0.0",
-    "description": "CRUD API for tasks built with clean architecture."
+    "version": "1.2.0",
+    "description": "CRUD API for tasks with recurrence rules, pagination, and soft delete."
   },
   "servers": [
     {
@@ -14,22 +14,54 @@
     {
       "name": "Tasks",
       "description": "Operations with tasks"
+    },
+    {
+      "name": "Recurrence Rules",
+      "description": "Manage periodic task generation rules"
     }
   ],
   "paths": {
     "/api/v1/tasks": {
       "get": {
         "tags": ["Tasks"],
-        "summary": "List tasks",
+        "summary": "List tasks (paginated)",
+        "description": "Returns a paginated list of tasks. Optionally filter by scheduled date range.",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "integer", "minimum": 1, "default": 1 },
+            "description": "Page number (1-based)"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "integer", "minimum": 1, "maximum": 100, "default": 20 },
+            "description": "Number of items per page (max 100)"
+          },
+          {
+            "name": "scheduled_date_from",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "string", "format": "date", "example": "2026-05-01" },
+            "description": "Filter tasks with scheduled_date >= this value"
+          },
+          {
+            "name": "scheduled_date_to",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "string", "format": "date", "example": "2026-05-31" },
+            "description": "Filter tasks with scheduled_date <= this value"
+          }
+        ],
         "responses": {
           "200": {
-            "description": "Task list",
+            "description": "Paginated task list",
             "content": {
               "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": { "$ref": "#/components/schemas/Task" }
-                }
+                "schema": { "$ref": "#/components/schemas/PaginatedTasks" }
               }
             }
           }
@@ -117,13 +149,166 @@
       },
       "delete": {
         "tags": ["Tasks"],
-        "summary": "Delete task",
+        "summary": "Delete task (soft delete)",
+        "description": "Marks the task as deleted. The task is no longer returned in listings but remains in the database.",
         "parameters": [
           {
             "name": "id",
             "in": "path",
             "required": true,
             "schema": { "type": "integer", "format": "int64", "minimum": 1 }
+          }
+        ],
+        "responses": {
+          "204": { "description": "Deleted" },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      },
+      }
+    },
+    "/api/v1/tasks/{id}/restore": {
+      "post": {
+        "tags": ["Tasks"],
+        "summary": "Restore task",
+        "description": "Restores a previously soft-deleted task.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "integer", "format": "int64", "minimum": 1 }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Restored task",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Task" }
+              }
+            }
+          },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/api/v1/recurrence-rules": {
+      "post": {
+        "tags": ["Recurrence Rules"],
+        "summary": "Create recurrence rule",
+        "description": "Creates a recurrence rule and immediately generates task instances for the given date range.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CreateRecurrenceRuleRequest" }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created rule with generated tasks",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/RecurrenceRuleWithTasks" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" }
+        }
+      },
+      "get": {
+        "tags": ["Recurrence Rules"],
+        "summary": "List recurrence rules",
+        "responses": {
+          "200": {
+            "description": "List of recurrence rules",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/RecurrenceRule" }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/recurrence-rules/{id}": {
+      "get": {
+        "tags": ["Recurrence Rules"],
+        "summary": "Get recurrence rule by ID",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "integer", "format": "int64", "minimum": 1 }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Recurrence rule",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/RecurrenceRule" }
+              }
+            }
+          },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      },
+      "put": {
+        "tags": ["Recurrence Rules"],
+        "summary": "Update recurrence rule",
+        "description": "Updates the rule and regenerates all associated tasks (old tasks are hard-deleted, new ones created).",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "integer", "format": "int64", "minimum": 1 }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CreateRecurrenceRuleRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated rule with regenerated tasks",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/RecurrenceRuleWithTasks" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      },
+      "delete": {
+        "tags": ["Recurrence Rules"],
+        "summary": "Delete recurrence rule (soft delete)",
+        "description": "Soft-deletes the rule. Pass delete_tasks=true to also soft-delete all generated tasks.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "integer", "format": "int64", "minimum": 1 }
+          },
+          {
+            "name": "delete_tasks",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "boolean", "default": false },
+            "description": "If true, also soft-deletes all tasks generated by this rule"
           }
         ],
         "responses": {
@@ -157,64 +342,89 @@
         "type": "object",
         "required": ["title"],
         "properties": {
-          "title": {
-            "type": "string",
-            "example": "Prepare release"
-          },
-          "description": {
-            "type": "string",
-            "example": "Collect release notes and check migrations"
-          },
-          "status": {
-            "type": "string",
-            "enum": ["new", "in_progress", "done"],
-            "example": "new"
-          }
+          "title": { "type": "string", "example": "Prepare release" },
+          "description": { "type": "string", "example": "Collect release notes and check migrations" },
+          "status": { "type": "string", "enum": ["new", "in_progress", "done"], "example": "new" }
         }
       },
       "UpdateTaskRequest": {
         "type": "object",
         "required": ["title", "status"],
         "properties": {
-          "title": {
-            "type": "string",
-            "example": "Prepare release"
-          },
-          "description": {
-            "type": "string",
-            "example": "Collect release notes and check migrations"
-          },
-          "status": {
-            "type": "string",
-            "enum": ["new", "in_progress", "done"],
-            "example": "in_progress"
-          }
+          "title": { "type": "string", "example": "Prepare release" },
+          "description": { "type": "string", "example": "Collect release notes and check migrations" },
+          "status": { "type": "string", "enum": ["new", "in_progress", "done"], "example": "in_progress" }
         }
       },
       "Task": {
         "type": "object",
         "properties": {
           "id": { "type": "integer", "format": "int64", "example": 1 },
-          "title": { "type": "string", "example": "Prepare release" },
-          "description": {
-            "type": "string",
-            "example": "Collect release notes and check migrations"
+          "title": { "type": "string", "example": "Обзвон пациентов" },
+          "description": { "type": "string", "example": "Ежедневный обзвон" },
+          "status": { "type": "string", "enum": ["new", "in_progress", "done"], "example": "new" },
+          "recurrence_rule_id": { "type": "integer", "format": "int64", "nullable": true, "example": 1 },
+          "scheduled_date": { "type": "string", "format": "date", "nullable": true, "example": "2026-05-15" },
+          "created_at": { "type": "string", "format": "date-time" },
+          "updated_at": { "type": "string", "format": "date-time" }
+        }
+      },
+      "PaginatedTasks": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/Task" }
           },
-          "status": {
-            "type": "string",
-            "enum": ["new", "in_progress", "done"],
-            "example": "new"
-          },
-          "created_at": {
-            "type": "string",
-            "format": "date-time",
-            "example": "2026-03-24T00:00:00Z"
-          },
-          "updated_at": {
-            "type": "string",
-            "format": "date-time",
-            "example": "2026-03-24T00:00:00Z"
-          }
+          "total": { "type": "integer", "example": 150, "description": "Total number of matching tasks" },
+          "page": { "type": "integer", "example": 1, "description": "Current page number" },
+          "limit": { "type": "integer", "example": 20, "description": "Items per page" }
+        }
+      },
+      "RecurrenceParams": {
+        "type": "object",
+        "required": ["type"],
+        "properties": {
+          "type": { "type": "string", "enum": ["daily", "monthly", "specific_dates", "even_odd"] },
+          "every_n_days": { "type": "integer", "minimum": 1, "example": 1 },
+          "day_of_month": { "type": "integer", "minimum": 1, "maximum": 31, "example": 15 },
+          "dates": { "type": "array", "items": { "type": "string", "format": "date" }, "example": ["2026-05-10", "2026-05-20"] },
+          "even_odd": { "type": "string", "enum": ["even", "odd"] }
+        }
+      },
+      "CreateRecurrenceRuleRequest": {
+        "type": "object",
+        "required": ["task_title", "recurrence", "start_date", "end_date"],
+        "properties": {
+          "task_title": { "type": "string", "example": "Обзвон пациентов" },
+          "task_description": { "type": "string", "example": "Ежедневный обзвон пациентов" },
+          "recurrence": { "$ref": "#/components/schemas/RecurrenceParams" },
+          "start_date": { "type": "string", "format": "date", "example": "2026-05-01" },
+          "end_date": { "type": "string", "format": "date", "example": "2026-05-31" }
+        }
+      },
+      "RecurrenceRule": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer", "format": "int64", "example": 1 },
+          "type": { "type": "string", "enum": ["daily", "monthly", "specific_dates", "even_odd"] },
+          "every_n_days": { "type": "integer", "nullable": true, "example": 1 },
+          "day_of_month": { "type": "integer", "nullable": true, "example": 15 },
+          "specific_dates": { "type": "array", "items": { "type": "string", "format": "date" }, "nullable": true },
+          "even_odd": { "type": "string", "enum": ["even", "odd"], "nullable": true },
+          "start_date": { "type": "string", "format": "date" },
+          "end_date": { "type": "string", "format": "date" },
+          "task_title": { "type": "string" },
+          "task_description": { "type": "string" },
+          "created_at": { "type": "string", "format": "date-time" },
+          "updated_at": { "type": "string", "format": "date-time" }
+        }
+      },
+      "RecurrenceRuleWithTasks": {
+        "type": "object",
+        "properties": {
+          "rule": { "$ref": "#/components/schemas/RecurrenceRule" },
+          "tasks": { "type": "array", "items": { "$ref": "#/components/schemas/Task" } }
         }
       },
       "Error": {

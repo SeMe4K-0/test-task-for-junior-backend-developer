@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/gorilla/mux"
 
@@ -97,19 +98,91 @@ func (h *TaskHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func (h *TaskHandler) List(w http.ResponseWriter, r *http.Request) {
-	tasks, err := h.usecase.List(r.Context())
+func (h *TaskHandler) Restore(w http.ResponseWriter, r *http.Request) {
+	id, err := getIDFromRequest(r)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+
+	restored, err := h.usecase.Restore(r.Context(), id)
 	if err != nil {
 		writeUsecaseError(w, err)
 		return
 	}
 
-	response := make([]taskDTO, 0, len(tasks))
-	for i := range tasks {
-		response = append(response, newTaskDTO(&tasks[i]))
+	writeJSON(w, http.StatusOK, newTaskDTO(restored))
+}
+
+func (h *TaskHandler) List(w http.ResponseWriter, r *http.Request) {
+	pagination := parsePagination(r)
+	filter, hasFilter := parseListFilter(r)
+
+	var (
+		output *taskusecase.ListOutput
+		err    error
+	)
+
+	if hasFilter {
+		output, err = h.usecase.ListWithFilter(r.Context(), filter, pagination)
+	} else {
+		output, err = h.usecase.List(r.Context(), pagination)
 	}
 
-	writeJSON(w, http.StatusOK, response)
+	if err != nil {
+		writeUsecaseError(w, err)
+		return
+	}
+
+	items := make([]taskDTO, 0, len(output.Tasks))
+	for i := range output.Tasks {
+		items = append(items, newTaskDTO(&output.Tasks[i]))
+	}
+
+	writeJSON(w, http.StatusOK, paginatedResponse{
+		Items: items,
+		Total: output.Total,
+		Page:  output.Page,
+		Limit: output.Limit,
+	})
+}
+
+func parsePagination(r *http.Request) taskusecase.Pagination {
+	p := taskusecase.Pagination{
+		Page:  taskusecase.DefaultPage,
+		Limit: taskusecase.DefaultLimit,
+	}
+	if v := r.URL.Query().Get("page"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			p.Page = n
+		}
+	}
+	if v := r.URL.Query().Get("limit"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			p.Limit = n
+		}
+	}
+	return p
+}
+
+func parseListFilter(r *http.Request) (taskusecase.ListFilter, bool) {
+	var filter taskusecase.ListFilter
+	hasFilter := false
+
+	if v := r.URL.Query().Get("scheduled_date_from"); v != "" {
+		if t, err := time.Parse("2006-01-02", v); err == nil {
+			filter.ScheduledDateFrom = &t
+			hasFilter = true
+		}
+	}
+	if v := r.URL.Query().Get("scheduled_date_to"); v != "" {
+		if t, err := time.Parse("2006-01-02", v); err == nil {
+			filter.ScheduledDateTo = &t
+			hasFilter = true
+		}
+	}
+
+	return filter, hasFilter
 }
 
 func getIDFromRequest(r *http.Request) (int64, error) {
